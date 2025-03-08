@@ -1,3 +1,7 @@
+# Build files
+build/
+.lock*
+
 # Prerequisites
 *.d
 
@@ -35,6 +39,7 @@
 *.i*86
 *.x86_64
 *.hex
+*.pbw
 
 # Debug files
 *.dSYM/
@@ -50,3 +55,6 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
+
+# LLM Prompts
+prompt.txt

@@ -1,0 +1,70 @@
+name: CD
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    name: Build Project
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Build Project
+        run: make build
+
+      - name: Copy Built Project From Docker Image
+        run: make copy
+
+      - name: Archive Build Artifact
+        run: tar -czvf pebble-darkroom.tar.gz ./pebble-darkroom.pbw
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-package
+          path: pebble-darkroom.tar.gz
+          retention-days: 7
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: built-package
+
+      - name: Zip Source Code
+        run: git archive --format=zip --output=source-code.zip HEAD
+
+      - name: Determine Pre-Release Status
+        id: prerelease_check
+        run: |
+          TAG_NAME="${{ github.ref_name }}"
+          if [[ "$TAG_NAME" =~ (beta|rc|alpha) ]]; then
+            echo "PRERELEASE=true" >> $GITHUB_OUTPUT
+          else
+            echo "PRERELEASE=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRERELEASE: ${{ steps.prerelease_check.outputs.PRERELEASE }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            pebble-darkroom.tar.gz source-code.zip \
+            --title "Release ${{ github.ref_name }}" \
+            --notes "Automated release of version ${{ github.ref_name }}" \
+            --prerelease=$PRERELEASE

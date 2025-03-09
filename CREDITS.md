@@ -2,7 +2,7 @@
 
 ## App
 - [Rebble (Pebble) C SDK](https://developer.rebble.io/developer.pebble.com/docs/c/index.html)
-- Claude Sonnet 3.5 LLM
+- Claude Sonnet 3.5, 3.7, and Google Gemini Pro 2.0 Experimental LLMs
 
 ## Docker
 - [pebble-devcontainer GitHub repo](https://github.com/FBarrca/pebble-devcontainer/)

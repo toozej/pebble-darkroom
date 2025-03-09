@@ -16,6 +16,11 @@ Pebble Darkroom is a specialized timer application designed for film and print d
 - **Manual Stage Advancement**: Timers don't automatically start the next stage, giving you full control
 - **Screen Refresh**: Force screen refresh to address screen tearing
 
+## Screenshots
+![Timer 1](docs/images/timer1.jpg)
+![Timer 2 on film mode](docs/images/timer2.jpg)
+![Settings Menu](docs/images/settings.jpg)
+
 ## Using the App
 
 ### Basic Controls

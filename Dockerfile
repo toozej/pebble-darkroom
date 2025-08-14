@@ -1,92 +1,68 @@
-FROM python:2.7-buster
+# Latest stable Debian slim
+FROM debian:stable-slim
 
-# Define metadata
-LABEL maintainer="FBarrCa"
+# Prevent tz/locale prompts during apt operations
+ENV DEBIAN_FRONTEND=noninteractive
 
-# Set arguments for flexibility
-ARG PEBBLE_TOOL_VERSION=pebble-sdk-4.5-linux64
-ARG PEBBLE_SDK_VERSION=4.3
-ARG NODE_VERSION=10.16.2
-ARG NVM_VERSION=0.35.0
+# Pebble/tooling environment
+ENV \
+  # Ensure curl-based installers work without TTY prompts
+  PIP_DISABLE_PIP_VERSION_CHECK=1 \
+  # pebble-tool analytics off to keep builds non-interactive
+  PEBBLE_TOOL_NO_ANALYTICS=1 \
+  # Add uv-installed tools and shims to PATH for all users
+  PATH="/home/pebble/.local/bin:/home/pebble/.local/share/uv/tools/bin:${PATH}"
 
-# Set environment variables
-ENV PEBBLE_TOOL_VERSION=${PEBBLE_TOOL_VERSION}
-ENV PEBBLE_SDK_VERSION=${PEBBLE_SDK_VERSION}
-ENV NVM_DIR=/home/pebble/.nvm
-ENV PATH="${NVM_DIR}/versions/node/v${NODE_VERSION}/bin:/opt/${PEBBLE_TOOL_VERSION}/bin:$PATH"
-
-# Update system and install required dependencies
-RUN apt-get update && \
+# Install required runtime dependencies for Pebble SDK and tooling.
+# - Keep to a single apt layer, use --no-install-recommends, and clean lists afterwards.
+RUN set -eux; \
+    apt-get update; \
     apt-get install -y --no-install-recommends \
-        curl \
-        libfreetype6-dev \
-        bash-completion \
-        libsdl1.2debian \
-        libfdt1 \
-        libpixman-1-0 \
-        libglib2.0-dev \
-        vim \
-        zsh \
-        git \
-        wget \
-        firefox-esr \
-        python-virtualenv && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+      python3 \
+      python3-venv \
+      python3-pip \
+      nodejs \
+      npm \
+      libsdl1.2debian \
+      libfdt1 \
+      ca-certificates \
+      curl \
+      git \
+      xz-utils \
+      bzip2 \
+      unzip \
+      # helpful base utils
+      bash \
+      tini; \
+    rm -rf /var/lib/apt/lists/*
 
-# Download and extract Pebble SDK
-RUN curl -sSL https://developer.rebble.io/s3.amazonaws.com/assets.getpebble.com/pebble-tool/${PEBBLE_TOOL_VERSION}.tar.bz2 \
-    | tar -xj -C /opt/
+# Create an unprivileged user to run builds.
+# Use a fixed UID/GID for predictable file ownership in bind mounts.
+ARG USER=pebble
+ARG UID=1000
+ARG GID=1000
+RUN set -eux; \
+    groupadd -g "${GID}" "${USER}"; \
+    useradd -l -m -u "${UID}" -g "${GID}" -s /bin/bash "${USER}"
 
-# Set working directory to Pebble SDK
-WORKDIR /opt/${PEBBLE_TOOL_VERSION}
+# Install uv for the non-root user (recommended install script).
+# This places `uv` under ~/.local/bin and sets up shims under ~/.local/share/uv/tools/bin.
+USER ${USER}
+WORKDIR /home/${USER}
 
-# Create and activate a virtual environment
-RUN virtualenv .env && \
-    /bin/bash -c "source .env/bin/activate && \
-    sed -i '/pypkjs/d' requirements.txt && \
-    pip install -r requirements.txt https://github.com/Willow-Systems/vagrant-pebble-sdk/raw/master/pypkjs-1.0.6.tar.gz && \
-    deactivate"
+# Install uv
+RUN set -eux; \
+    curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Remove unnecessary cache
-RUN rm -rf /root/.cache/
+# Install pebble-tool via uv (user-local, no root required)
+RUN set -eux; \
+    uv tool install pebble-tool
 
-# Create a non-root user and disable analytics
-RUN adduser --disabled-password --gecos "" --ingroup users pebble && \
-    echo "pebble ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
-    mkdir -p /home/pebble/.pebble-sdk/ && \
-    chown -R pebble:users /home/pebble/.pebble-sdk && \
-    touch /home/pebble/.pebble-sdk/NO_TRACKING
-
-# Install Oh My Zsh manually (as the pebble user)
-USER pebble
-RUN git clone --depth=1 https://github.com/ohmyzsh/ohmyzsh.git ~/.oh-my-zsh && \
-    cp ~/.oh-my-zsh/templates/zshrc.zsh-template ~/.zshrc && \
-    echo "export PATH=${PATH}" >> ~/.zshrc && \
-    echo "export NVM_DIR=${NVM_DIR}" >> ~/.zshrc && \
-    echo "[ -s \"\$NVM_DIR/nvm.sh\" ] && \. \"\$NVM_DIR/nvm.sh\"" >> ~/.zshrc && \
-    echo "[ -s \"\$NVM_DIR/bash_completion\" ] && \. \"\$NVM_DIR/bash_completion\"" >> ~/.zshrc && \
-    echo "source /opt/${PEBBLE_TOOL_VERSION}/.env/bin/activate" >> ~/.zshrc
-
-# Set default shell to Zsh
-USER root
-RUN usermod --shell $(which zsh) pebble
-
-# Switch to non-root user for further installations
-USER pebble
-
-# Install NVM and Node.js
-RUN mkdir -p $NVM_DIR && \
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v${NVM_VERSION}/install.sh | bash && \
-    . $NVM_DIR/nvm.sh && \
-    nvm install $NODE_VERSION
-
-# Download and install Pebble SDK
-RUN curl -L -o /tmp/sdk-core-${PEBBLE_SDK_VERSION}.tar.bz2 \
-    https://github.com/aveao/PebbleArchive/raw/master/SDKCores/sdk-core-${PEBBLE_SDK_VERSION}.tar.bz2 && \
-    pebble sdk install /tmp/sdk-core-${PEBBLE_SDK_VERSION}.tar.bz2 && \
-    pebble sdk activate ${PEBBLE_SDK_VERSION} && \
-    rm /tmp/sdk-core-${PEBBLE_SDK_VERSION}.tar.bz2
+# Preinstall the latest Pebble SDK into the image to avoid downloads at runtime.
+# This will populate the user's ~/.pebble-sdk directory.
+RUN set -eux; \
+    pebble --version; \
+    pebble sdk install latest
 
 # Define mountable volume for projects
 VOLUME /workspace/
@@ -94,5 +70,9 @@ VOLUME /workspace/
 # Set default working directory
 WORKDIR /workspace/
 
-# Default command
-CMD ["zsh"]
+# Use Tini as PID 1 for signal handling; drop into a shell by default.
+# (Tini was installed from Debian above.)
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["/bin/bash"]
+
+

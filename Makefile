@@ -162,7 +162,7 @@ pre-commit-install: ## Install pre-commit hooks and necessary binaries
 	# shellcheck
 	command -v shellcheck || sudo dnf install -y ShellCheck || sudo apt install -y shellcheck
 	# checkmake
-	go install github.com/mrtazz/checkmake/cmd/checkmake@latest
+	go install github.com/checkmake/checkmake/cmd/checkmake@latest
 	# install and update pre-commits
 	pre-commit install
 	pre-commit autoupdate

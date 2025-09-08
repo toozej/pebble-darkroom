@@ -3,26 +3,23 @@
     "dockerComposeFile": "../docker-compose.yml",
     "service": "pebble-sdk",
     "workspaceFolder": "/workspace",
-    "settings": {
-        "terminal.integrated.defaultProfile.linux": "zsh"
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-vscode-remote.remote-containers",
+                "ms-python.python",
+                "ms-vscode.cpptools-extension-pack"
+            ]
+        }
     },
-    "extensions": [
-        "ms-vscode-remote.remote-containers",
-        "ms-python.python",
-        "ms-vscode.cpptools-extension-pack"
-    ],
     "remoteUser": "pebble",
-    "postCreateCommand": "zsh -c 'source ~/.zshrc && pebble --version'",
+    "postCreateCommand": "pebble --version",
     "runArgs": [
         "--network=host",
         "--env",
         "DISPLAY=${DISPLAY}"
     ],
     "containerEnv": {
-        "PEBBLE_TOOL_VERSION": "pebble-sdk-4.5-linux64",
-        "PEBBLE_SDK_VERSION": "4.3",
-        "NVM_VERSION": "0.35.0",
-        "NODE_VERSION": "18.17.1",
         "NVM_DIR": "/home/pebble/.nvm",
         "DISPLAY": "${DISPLAY}"
     },

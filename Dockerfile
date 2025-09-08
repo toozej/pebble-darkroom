@@ -1,5 +1,5 @@
 # Latest stable Debian slim
-FROM debian:stable-slim
+FROM debian:stable-slim AS base
 
 # Prevent tz/locale prompts during apt operations
 ENV DEBIAN_FRONTEND=noninteractive
@@ -31,8 +31,7 @@ RUN set -eux; \
       xz-utils \
       bzip2 \
       unzip \
-      # helpful base utils
-      bash \
+      build-essential \
       tini; \
     rm -rf /var/lib/apt/lists/*
 
@@ -63,6 +62,30 @@ RUN set -eux; \
 RUN set -eux; \
     pebble --version; \
     pebble sdk install latest
+
+
+FROM base AS test
+# Build and run unit tests for pebble-darkroom
+USER root
+COPY app/pebble-darkroom/ /workspace/pebble-darkroom/
+RUN chown -R pebble:pebble /workspace && chown -R pebble:pebble /workspace/pebble-darkroom
+USER pebble
+WORKDIR /workspace
+RUN pebble new-project pebble-test && \
+    cp -r pebble-darkroom/src pebble-test/ && \
+    cp -r pebble-darkroom/tests pebble-test/
+WORKDIR /workspace/pebble-test
+RUN gcc -I./tests -Isrc/c -c tests/unity.c -o unity.o && \
+    gcc -I./tests -Isrc/c -c tests/test_runner.c -o test_runner.o && \
+    gcc -I./tests -Isrc/c -c tests/settings.c -o settings.o && \
+    gcc -I./tests -Isrc/c -c tests/test_settings.c -o test_settings.o && \
+    gcc -I./tests -Isrc/c -c tests/test_timer.c -o test_timer.o && \
+    gcc -I./tests -Isrc/c -c tests/test_display.c -o test_display.o && \
+    gcc unity.o test_runner.o settings.o test_settings.o test_timer.o test_display.o -lm -o test_runner && \
+    ./test_runner
+
+
+FROM base AS final
 
 # Define mountable volume for projects
 VOLUME /workspace/

@@ -137,12 +137,13 @@ make build copy
 
 #### Method 1: Using Pebble Phone App
 
-1. Enable Developer Mode in the Pebble smartphone app
+1. Enable Developer Mode in the Pebble smartphone app, noting your phone's IP address
 2. Ensure your phone and Pebble watch are connected
 3. Run the following command:
 ```bash
-cd app/pebble-darkroom/
-pebble install --phone YOUR_PHONE_IP
+cd pebble-darkroom/
+pebble clean
+pebble install --phone <YOUR_PHONE_IP>
 ```
 
 #### Method 2: Sideloading
@@ -167,7 +168,7 @@ The app saves your settings between sessions, including:
 
 If you experience screen tearing (horizontal lines across the display):
 1. Long-press the UP button to force a screen refresh
-2. If the issue persists, try restarting your Pebble watch
+2. If the issue persists, try [this fix](https://gamedummy.com/pebblefix/)
 
 ### Timer Not Advancing
 

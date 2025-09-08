@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: check-yaml
         name: Check for valid YAML syntax in repo
@@ -44,7 +44,7 @@ repos:
 
   # lint Dockerfile
   - repo: https://github.com/hadolint/hadolint
-    rev: v2.13.1-beta
+    rev: v2.13.1
     hooks:
       - id: hadolint-docker
         args: ["--ignore", "DL3007", "--ignore", "DL3008", "--ignore", "DL4006", "--ignore", "SC2046", "--ignore", "SC1091"]

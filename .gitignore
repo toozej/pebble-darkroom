@@ -1,6 +1,7 @@
 # Build files
 build/
 .lock*
+tmp/
 
 # Prerequisites
 *.d
@@ -40,6 +41,7 @@ build/
 *.x86_64
 *.hex
 *.pbw
+test_runner
 
 # Debug files
 *.dSYM/

@@ -2,21 +2,31 @@
 
 ## Overview
 
-Pebble Darkroom is a specialized timer application designed for film and print development in darkroom photography. The app provides separate timers for each stage of the development process (Develop, Stop, Fix, Wash), with a user-friendly interface designed for use in low-light darkroom environments.
+Pebble Darkroom is a specialized timer application designed for film and print development in darkroom photography. The app provides separate timers for each stage of the development process, with dedicated support for both RC (Resin Coated) and Fiber paper types. Each timer features distinct visual themes and stage progressions optimized for professional darkroom workflows.
 
 ## Features
 
 - **Dual Timer System**: Run two independent timers simultaneously for managing multiple development processes
-- **Film and Print Modes**: Preconfigured timers for both film and print development processes
-- **Stage Tracking**: Visual indicators for development stages (Develop, Stop, Fix, Wash)
-- **Customizable Timing**: Adjust duration for each development stage
-- **Display Options**: Invert colors for better visibility in darkroom conditions
+- **Paper-Specific Modes**: 
+  - Timer 1: RC (Resin Coated) paper with 4-stage processing and light theme
+  - Timer 2: Fiber paper with 6-stage processing including hypo clear and extended wash cycles, with dark theme
+- **Film Mode**: Traditional film development process available on both timers
+- **Extended Stage Support**: 
+  - RC Paper: Develop → Stop → Fix → Wash (4 stages)
+  - Fiber Paper: Develop → Stop → Fix → Wash1 → Hypo Clear → Wash2 (6 stages)
+- **Enhanced Visual Design**: Larger fonts and improved readability for darkroom conditions
+- **Smart Mode Indicators**: Clear display format showing paper type, mode, and current stage
+- **Customizable Timing**: Independent timing configuration for RC and Fiber paper workflows
+- **Display Themes**: Automatic light/dark themes with optional color inversion
 - **Haptic Feedback**: Distinctive vibration patterns for each timer
 - **Pause/Resume**: Full control over timer progression
 - **Manual Stage Advancement**: Timers don't automatically start the next stage, giving you full control
 - **Screen Refresh**: Force screen refresh to address screen tearing
 
 ## Screenshots
+
+> **Note**: Screenshots below show the previous interface. The enhanced version features larger fonts, improved mode indicators showing paper types (RC/FB), and updated visual themes with Timer 1 defaulting to light mode and Timer 2 to dark mode.
+
 ![Timer 1](docs/images/timer1.jpg)
 ![Timer 2 on film mode](docs/images/timer2.jpg)
 ![Settings Menu](docs/images/settings.jpg)
@@ -44,7 +54,12 @@ Pebble Darkroom is a specialized timer application designed for film and print d
    - Choose Film or Print mode using DOWN double-click
    - Press DOWN button to start the first stage (Develop)
 
-2. **Between Stages**:
+2. **Paper Type Selection**:
+   - **Timer 1 (Print Mode)**: Automatically configured for RC paper processing
+   - **Timer 2 (Print Mode)**: Automatically configured for Fiber paper processing
+   - **Film Mode**: Available on both timers with traditional 4-stage process
+
+3. **Between Stages**:
    - When a stage completes, the app will:
      - Vibrate with a pattern specific to the active timer
      - Timer 1: Single pulse
@@ -53,17 +68,30 @@ Pebble Darkroom is a specialized timer application designed for film and print d
    - After 2 seconds, a reminder vibration occurs with the same pattern
    - Press DOWN button to start the next stage when ready
 
-3. **Pausing/Resuming**:
+4. **Pausing/Resuming**:
    - Press DOWN button once to pause a running timer
    - Press DOWN button again to resume the timer
 
 ### Timer Indicators
 
-- The app displays which timer is active (Timer 1 or Timer 2)
-- Mode indicator shows F (Film) or P (Print)
-- Stage indicator shows the current development stage (Dev, Stop, Fix, Wash)
-- Progress bar at bottom of screen shows current stage position
-- Timer display shows remaining time in minutes:seconds format
+The app uses an enhanced display format: **[Mode] | [Paper Type] | [Stage] | [Status]**
+
+- **Mode Indicators**: 
+  - `P` = Print mode
+  - `F` = Film mode
+- **Paper Type Indicators** (Print mode only):
+  - `RC` = RC (Resin Coated) paper (Timer 1)
+  - `FB` = Fiber paper (Timer 2)
+- **Stage Indicators**:
+  - RC Paper: `Dev`, `Stop`, `Fix`, `Wash`
+  - Fiber Paper: `Dev`, `Stop`, `Fix`, `Wash1`, `HC` (Hypo Clear), `Wash2`
+  - Film: `Dev`, `Stop`, `Fix`, `Wash`
+- **Status**: `RUNNING`, `PAUSED`, or blank when stopped
+- **Visual Themes**:
+  - Timer 1: Light background with black text (default)
+  - Timer 2: Dark background with white text (default)
+- Progress bar shows current stage position relative to total stages
+- Timer display shows remaining time in minutes:seconds format with larger, more readable fonts
 
 ## Settings Menu
 
@@ -88,30 +116,81 @@ Customize seconds for each film development stage:
 - Fix (default: 5:00)
 - Wash (default: 5:00)
 
-### Print Times
+### RC Print Times
 
-Customize seconds for each print development stage:
+Customize seconds for each RC paper development stage:
 - Develop (default: 1:00)
 - Stop (default: 0:30)
 - Fix (default: 5:00)
 - Wash (default: 5:00)
 
+### Fiber Print Times
+
+Customize seconds for each Fiber paper development stage:
+- Develop (default: 2:00)
+- Stop (default: 0:30)
+- Fix (default: 2:00)
+- Wash1 (default: 5:00)
+- Hypo Clear (default: 2:00)
+- Wash2 (default: 15:00)
+
 ## Use Cases
 
-### Developing Film and Prints Simultaneously
+### RC Paper Workflow (Timer 1)
 
-1. Set Timer 1 to Film mode
-2. Set Timer 2 to Print mode
-3. Start Timer 1 for film development
-4. When needed, double-click UP to switch to Timer 2
-5. Start Timer 2 for print development
-6. Switch between timers as needed to monitor both processes
+1. Double-click UP to select Timer 1 (light theme)
+2. Double-click DOWN to set Print mode
+3. The display will show `P | RC | Dev |` indicating RC paper mode
+4. Follow the 4-stage process: Develop → Stop → Fix → Wash
+5. Timer 1 uses optimized timing for RC paper's faster processing
+
+### Fiber Paper Workflow (Timer 2)
+
+1. Double-click UP to select Timer 2 (dark theme)
+2. Double-click DOWN to set Print mode
+3. The display will show `P | FB | Dev |` indicating Fiber paper mode
+4. Follow the 6-stage process: Develop → Stop → Fix → Wash1 → HC → Wash2
+5. Timer 2 includes hypo clear stage and extended wash cycles for proper fiber processing
+
+### Processing Both Paper Types Simultaneously
+
+1. Set Timer 1 to Print mode for RC paper
+2. Set Timer 2 to Print mode for Fiber paper
+3. Start Timer 1 for RC paper development
+4. Double-click UP to switch to Timer 2
+5. Start Timer 2 for Fiber paper development
+6. Switch between timers as needed - each maintains its own stage progression
+7. Visual themes help distinguish between the two processes at a glance
+
+### Understanding RC vs Fiber Paper Processing
+
+**RC (Resin Coated) Paper - Timer 1:**
+- Faster processing with 4 stages
+- Shorter wash times due to resin coating
+- Light theme for easy identification
+- Typical workflow: 1 min develop, 30 sec stop, 5 min fix, 5 min wash
+
+**Fiber Paper - Timer 2:**
+- Extended processing with 6 stages
+- Requires hypo clear treatment to remove residual fixer
+- Longer wash cycles for archival processing
+- Dark theme for easy identification
+- Typical workflow: 2 min develop, 30 sec stop, 2 min fix, 5 min wash1, 2 min hypo clear, 15 min wash2
+
+### Film Development
+
+1. Select either Timer 1 or Timer 2 using UP double-click
+2. Set to Film mode using DOWN double-click
+3. Both timers support traditional 4-stage film development
+4. Use both timers for different film types or simultaneous processing
 
 ### Working in Dark Conditions
 
 1. Enable Backlight setting if needed
-2. Consider inverting display colors for better visibility
-3. Use haptic feedback to track timer completion
+2. Timer 1 (light theme) and Timer 2 (dark theme) provide visual distinction
+3. Consider inverting display colors for better visibility
+4. Use haptic feedback to track timer completion
+5. Larger fonts improve readability in low-light conditions
 
 ## Building and Installing the App
 
@@ -176,6 +255,7 @@ If the timer completes but doesn't seem to advance to the next stage:
 1. Check that vibration is enabled in settings
 2. Remember that you need to manually start each stage with the DOWN button
 3. Verify that the watch hasn't entered power-saving mode
+4. Note that RC paper has 4 stages while Fiber paper has 6 stages - ensure you're expecting the correct number of stages for your paper type
 
 ### Settings Not Saving
 
@@ -183,3 +263,12 @@ If your custom settings aren't persisting between app launches:
 1. Make sure to fully exit the settings menu before closing the app
 2. Check that your Pebble has sufficient storage space available
 3. Try rebuilding and reinstalling the app
+4. Note that RC and Fiber paper settings are stored separately - changes to one won't affect the other
+
+### Paper Type Confusion
+
+If you're unsure which paper type is active:
+1. Check the mode indicator: `RC` for Timer 1, `FB` for Timer 2 in print mode
+2. Timer 1 defaults to light theme, Timer 2 to dark theme
+3. RC paper shows 4 stages, Fiber paper shows 6 stages in the progress indicator
+4. Fiber paper includes `HC` (Hypo Clear) and `Wash2` stages that RC paper doesn't have

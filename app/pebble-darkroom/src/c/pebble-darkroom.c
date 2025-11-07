@@ -3,6 +3,8 @@
 #define SETTINGS_KEY 1
 #define FILM_TIMES_KEY 2
 #define PRINT_TIMES_KEY 3
+#define RC_PRINT_TIMES_KEY 4
+#define FIBER_PRINT_TIMES_KEY 5
 
 // Window and layer handles
 static Window *s_main_window;
@@ -25,14 +27,24 @@ typedef enum {
     STAGE_DEVELOP,
     STAGE_STOP,
     STAGE_FIX,
-    STAGE_WASH
+    STAGE_WASH,
+    STAGE_WASH1,
+    STAGE_HYPO_CLEAR,
+    STAGE_WASH2
 } TimerStage;
+
+typedef enum {
+    PAPER_RC,
+    PAPER_FIBER
+} PaperType;
 
 typedef struct {
     bool running;
     bool paused;
     TimerMode mode;
     TimerStage stage;
+    PaperType paper_type;
+    int max_stages;
     int seconds_remaining;
     AppTimer *timer_handle;
 } TimerState;
@@ -42,6 +54,8 @@ static TimerState s_timer1 = {
     .paused = false,
     .mode = MODE_PRINT,
     .stage = STAGE_DEVELOP,
+    .paper_type = PAPER_RC,
+    .max_stages = 4,
     .seconds_remaining = 0,
     .timer_handle = NULL
 };
@@ -51,6 +65,8 @@ static TimerState s_timer2 = {
     .paused = false,
     .mode = MODE_PRINT,
     .stage = STAGE_DEVELOP,
+    .paper_type = PAPER_FIBER,
+    .max_stages = 6,
     .seconds_remaining = 0,
     .timer_handle = NULL
 };
@@ -70,8 +86,8 @@ typedef struct {
 static Settings s_settings = {
     .vibration_enabled = true,
     .backlight_enabled = false,
-    .invert_timer1_colors = false,  // Timer 1 is white bg by default
-    .invert_timer2_colors = false,  // Timer 2 is black bg by default
+    .invert_timer1_colors = false,  // Timer 1 defaults to light mode (white bg, black text)
+    .invert_timer2_colors = false,  // Timer 2 defaults to dark mode (black bg, white text)
     .invert_menu_colors = false
 };
 
@@ -90,11 +106,32 @@ static int print_times[4] = {
     300   // Wash: 5 mins
 };
 
+// RC paper timing (4 stages)
+static int rc_print_times[4] = {
+    60,   // Develop: 1 min
+    30,   // Stop: 30 secs
+    300,  // Fix: 5 mins
+    300   // Wash: 5 mins
+};
+
+// Fiber paper timing (7 elements to match enum indices)
+static int fiber_print_times[7] = {
+    120,  // Develop: 2 min
+    30,   // Stop: 30 sec
+    120,  // Fix: 2 min
+    0,    // Wash: unused for fiber paper
+    300,  // Wash1: 5 min
+    120,  // Hypo Clear: 2 min
+    900   // Wash2: 15 min
+};
+
 // Persistent storage functions
 static void save_settings() {
     persist_write_data(SETTINGS_KEY, &s_settings, sizeof(Settings));
     persist_write_data(FILM_TIMES_KEY, &film_times, sizeof(film_times));
     persist_write_data(PRINT_TIMES_KEY, &print_times, sizeof(print_times));
+    persist_write_data(RC_PRINT_TIMES_KEY, &rc_print_times, sizeof(rc_print_times));
+    persist_write_data(FIBER_PRINT_TIMES_KEY, &fiber_print_times, sizeof(fiber_print_times));
 }
 
 static void load_settings() {
@@ -106,6 +143,61 @@ static void load_settings() {
     }
     if (persist_exists(PRINT_TIMES_KEY)) {
         persist_read_data(PRINT_TIMES_KEY, &print_times, sizeof(print_times));
+    }
+    
+    // Load RC and Fiber timing arrays, with backward compatibility migration
+    if (persist_exists(RC_PRINT_TIMES_KEY)) {
+        persist_read_data(RC_PRINT_TIMES_KEY, &rc_print_times, sizeof(rc_print_times));
+    } else if (persist_exists(PRINT_TIMES_KEY)) {
+        // Migrate existing print_times to rc_print_times for backward compatibility
+        for (int i = 0; i < 4; i++) {
+            rc_print_times[i] = print_times[i];
+        }
+    }
+    
+    if (persist_exists(FIBER_PRINT_TIMES_KEY)) {
+        persist_read_data(FIBER_PRINT_TIMES_KEY, &fiber_print_times, sizeof(fiber_print_times));
+    }
+}
+
+// Timer configuration structure
+typedef struct {
+    TimerMode mode;
+    PaperType paper_type;
+    int *timing_array;
+    int stage_count;
+    const char *paper_name;
+} TimerConfig;
+
+// Timer configuration lookup helper function
+static TimerConfig get_timer_config(int timer_number, TimerMode mode) {
+    if (mode == MODE_FILM) {
+        return (TimerConfig){
+            .mode = MODE_FILM,
+            .paper_type = PAPER_RC, // Not applicable for film
+            .timing_array = film_times,
+            .stage_count = 4,
+            .paper_name = "Film"
+        };
+    } else {
+        // Timer 1 = RC, Timer 2 = Fiber
+        if (timer_number == 1) {
+            return (TimerConfig){
+                .mode = MODE_PRINT,
+                .paper_type = PAPER_RC,
+                .timing_array = rc_print_times,
+                .stage_count = 4,
+                .paper_name = "RC"
+            };
+        } else {
+            return (TimerConfig){
+                .mode = MODE_PRINT,
+                .paper_type = PAPER_FIBER,
+                .timing_array = fiber_print_times,
+                .stage_count = 6,
+                .paper_name = "FB"
+            };
+        }
     }
 }
 
@@ -124,18 +216,37 @@ static void update_timer_text() {
 
 static void update_mode_text() {
     TimerState *timer = get_active_timer();
-    static char s_buffer[20];
+    static char s_buffer[32];
     char mode_char = (timer->mode == MODE_FILM) ? 'F' : 'P';
+    
+    // Get paper type string
+    const char *paper_type = "Film";
+    if (timer->mode == MODE_PRINT) {
+        paper_type = (timer->paper_type == PAPER_RC) ? "RC" : "FB";
+    }
+    
+    // Get stage text including new fiber stages
     const char *stage_text = "Unknown";
     switch (timer->stage) {
         case STAGE_DEVELOP: stage_text = "Dev"; break;
         case STAGE_STOP: stage_text = "Stop"; break;
         case STAGE_FIX: stage_text = "Fix"; break;
         case STAGE_WASH: stage_text = "Wash"; break;
+        case STAGE_WASH1: stage_text = "Wash1"; break;
+        case STAGE_HYPO_CLEAR: stage_text = "HC"; break;
+        case STAGE_WASH2: stage_text = "Wash2"; break;
     }
-    snprintf(s_buffer, sizeof(s_buffer), "%c | %s | %s", 
-             mode_char, stage_text, 
-             timer->paused ? "PAUSED" : "");
+    
+    // Format: [P,F] | [RC,FB] | [Stage] | [Status]
+    const char *status = timer->paused ? "PAUSED" : (timer->running ? "RUNNING" : "");
+    if (strlen(status) > 0) {
+        snprintf(s_buffer, sizeof(s_buffer), "%c | %s | %s | %s", 
+                 mode_char, paper_type, stage_text, status);
+    } else {
+        snprintf(s_buffer, sizeof(s_buffer), "%c | %s | %s", 
+                 mode_char, paper_type, stage_text);
+    }
+    
     text_layer_set_text(s_mode_layer, s_buffer);
 }
 
@@ -183,13 +294,31 @@ static void timer_callback(void *data) {
         
         // Move to next stage but don't start it automatically
         timer->stage++;
-        if (timer->stage > STAGE_WASH) {
+        
+        // Determine which timer this is (1 or 2)
+        int timer_number = (timer == &s_timer1) ? 1 : 2;
+        
+        // Get timer configuration to determine max stages and timing
+        TimerConfig config = get_timer_config(timer_number, timer->mode);
+        
+        // Calculate the maximum stage index based on stage count
+        int max_stage_index = config.stage_count - 1;
+        TimerStage max_stage;
+        
+        if (timer->mode == MODE_FILM) {
+            max_stage = STAGE_WASH; // Film always has 4 stages ending at STAGE_WASH
+        } else if (timer->paper_type == PAPER_RC) {
+            max_stage = STAGE_WASH; // RC paper has 4 stages ending at STAGE_WASH
+        } else {
+            max_stage = STAGE_WASH2; // Fiber paper has 6 stages ending at STAGE_WASH2
+        }
+        
+        if (timer->stage > max_stage) {
             timer->stage = STAGE_DEVELOP;
             timer->running = false;
         } else {
-            // Set the time for the next stage but don't start the timer
-            timer->seconds_remaining = (timer->mode == MODE_FILM) ? 
-                film_times[timer->stage] : print_times[timer->stage];
+            // Set the time for the next stage using the configuration
+            timer->seconds_remaining = config.timing_array[timer->stage];
             timer->running = false;  // Don't start running automatically
             
             // Add a delayed reminder vibration
@@ -210,7 +339,7 @@ static void timer_callback(void *data) {
 
 // Menu callbacks
 static uint16_t menu_get_num_sections_callback(MenuLayer *menu_layer, void *data) {
-    return 4;
+    return 5;
 }
 
 static uint16_t menu_get_num_rows_callback(MenuLayer *menu_layer, uint16_t section_index, void *data) {
@@ -218,7 +347,8 @@ static uint16_t menu_get_num_rows_callback(MenuLayer *menu_layer, uint16_t secti
         case 0: return 2;  // Basic Settings
         case 1: return 3;  // Color Settings
         case 2: return 4;  // Film times
-        case 3: return 4;  // Print times
+        case 3: return 4;  // RC Print times
+        case 4: return 6;  // Fiber Print times
         default: return 0;
     }
 }
@@ -239,7 +369,10 @@ static void menu_draw_header_callback(GContext* ctx, const Layer *cell_layer, ui
             menu_cell_basic_header_draw(ctx, cell_layer, "Film Times");
             break;
         case 3:
-            menu_cell_basic_header_draw(ctx, cell_layer, "Print Times");
+            menu_cell_basic_header_draw(ctx, cell_layer, "RC Print Times");
+            break;
+        case 4:
+            menu_cell_basic_header_draw(ctx, cell_layer, "Fiber Print Times");
             break;
     }
 }
@@ -300,19 +433,47 @@ static void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuI
             switch (cell_index->row) {
                 case 0:
                     snprintf(buffer, sizeof(buffer), "Develop: %d:%02d", 
-                             print_times[0]/60, print_times[0]%60);
+                             rc_print_times[0]/60, rc_print_times[0]%60);
                     break;
                 case 1:
                     snprintf(buffer, sizeof(buffer), "Stop: %d:%02d", 
-                             print_times[1]/60, print_times[1]%60);
+                             rc_print_times[1]/60, rc_print_times[1]%60);
                     break;
                 case 2:
                     snprintf(buffer, sizeof(buffer), "Fix: %d:%02d", 
-                             print_times[2]/60, print_times[2]%60);
+                             rc_print_times[2]/60, rc_print_times[2]%60);
                     break;
                 case 3:
                     snprintf(buffer, sizeof(buffer), "Wash: %d:%02d", 
-                             print_times[3]/60, print_times[3]%60);
+                             rc_print_times[3]/60, rc_print_times[3]%60);
+                    break;
+            }
+            break;
+        case 4:
+            switch (cell_index->row) {
+                case 0:
+                    snprintf(buffer, sizeof(buffer), "Develop: %d:%02d", 
+                             fiber_print_times[0]/60, fiber_print_times[0]%60);
+                    break;
+                case 1:
+                    snprintf(buffer, sizeof(buffer), "Stop: %d:%02d", 
+                             fiber_print_times[1]/60, fiber_print_times[1]%60);
+                    break;
+                case 2:
+                    snprintf(buffer, sizeof(buffer), "Fix: %d:%02d", 
+                             fiber_print_times[2]/60, fiber_print_times[2]%60);
+                    break;
+                case 3:
+                    snprintf(buffer, sizeof(buffer), "Wash1: %d:%02d", 
+                             fiber_print_times[4]/60, fiber_print_times[4]%60);
+                    break;
+                case 4:
+                    snprintf(buffer, sizeof(buffer), "HC: %d:%02d", 
+                             fiber_print_times[5]/60, fiber_print_times[5]%60);
+                    break;
+                case 5:
+                    snprintf(buffer, sizeof(buffer), "Wash2: %d:%02d", 
+                             fiber_print_times[6]/60, fiber_print_times[6]%60);
                     break;
             }
             break;
@@ -356,7 +517,6 @@ static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, v
             break;
         case 2: {
             // Time adjustment window for film times
-            int *film_time_array = (cell_index->section == 1) ? film_times : print_times;
             NumberWindow *number_window = number_window_create(
                 "Adjust Time (seconds)",
                 (NumberWindowCallbacks) {
@@ -366,13 +526,12 @@ static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, v
                 },
                 NULL
             );
-            number_window_set_value(number_window, film_time_array[cell_index->row]);
+            number_window_set_value(number_window, film_times[cell_index->row]);
             window_stack_push(number_window_get_window(number_window), true);
             break;
         }
         case 3: {
-            // Time adjustment window for print times
-            int *print_time_array = (cell_index->section == 1) ? print_times : print_times;
+            // Time adjustment window for RC print times
             NumberWindow *number_window = number_window_create(
                 "Adjust Time (seconds)",
                 (NumberWindowCallbacks) {
@@ -382,7 +541,35 @@ static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, v
                 },
                 NULL
             );
-            number_window_set_value(number_window, print_time_array[cell_index->row]);
+            number_window_set_value(number_window, rc_print_times[cell_index->row]);
+            window_stack_push(number_window_get_window(number_window), true);
+            break;
+        }
+        case 4: {
+            // Time adjustment window for Fiber print times
+            NumberWindow *number_window = number_window_create(
+                "Adjust Time (seconds)",
+                (NumberWindowCallbacks) {
+                    .decremented = NULL,
+                    .incremented = NULL,
+                    .selected = NULL,
+                },
+                NULL
+            );
+            
+            // Map row index to correct fiber_print_times array index
+            int fiber_index;
+            switch (cell_index->row) {
+                case 0: fiber_index = 0; break;  // Develop
+                case 1: fiber_index = 1; break;  // Stop
+                case 2: fiber_index = 2; break;  // Fix
+                case 3: fiber_index = 4; break;  // Wash1
+                case 4: fiber_index = 5; break;  // HC
+                case 5: fiber_index = 6; break;  // Wash2
+                default: fiber_index = 0; break;
+            }
+            
+            number_window_set_value(number_window, fiber_print_times[fiber_index]);
             window_stack_push(number_window_get_window(number_window), true);
             break;
         }
@@ -401,8 +588,19 @@ static void reset_timer(TimerState *timer) {
     timer->running = false;
     timer->paused = false;
     timer->stage = STAGE_DEVELOP;
-    timer->seconds_remaining = (timer->mode == MODE_FILM) ? 
-        film_times[STAGE_DEVELOP] : print_times[STAGE_DEVELOP];
+    
+    // Determine which timer this is (1 or 2)
+    int timer_number = (timer == &s_timer1) ? 1 : 2;
+    
+    // Get timer configuration
+    TimerConfig config = get_timer_config(timer_number, timer->mode);
+    
+    // Update timer properties based on configuration
+    timer->paper_type = config.paper_type;
+    timer->max_stages = config.stage_count;
+    
+    // Set initial timing for develop stage
+    timer->seconds_remaining = config.timing_array[STAGE_DEVELOP];
 }
 
 static void pause_timer(TimerState *timer) {
@@ -477,6 +675,15 @@ static void down_long_click_handler(ClickRecognizerRef recognizer, void *context
 static void down_double_click_handler(ClickRecognizerRef recognizer, void *context) {
     TimerState *timer = get_active_timer();
     timer->mode = (timer->mode == MODE_FILM) ? MODE_PRINT : MODE_FILM;
+    
+    // When switching to print mode, restore the appropriate paper type for each timer
+    if (timer->mode == MODE_PRINT) {
+        int timer_number = (timer == &s_timer1) ? 1 : 2;
+        TimerConfig config = get_timer_config(timer_number, MODE_PRINT);
+        timer->paper_type = config.paper_type;
+        timer->max_stages = config.stage_count;
+    }
+    
     reset_timer(timer);
     update_timer_text();
     update_mode_text();
@@ -535,13 +742,44 @@ static void menu_window_unload(Window *window) {
     menu_layer_destroy(s_menu_layer);
 }
 
+// Helper function to get stage display index for proper visual representation
+static int get_stage_display_index(TimerStage stage, PaperType paper_type) {
+    if (paper_type == PAPER_RC) {
+        // RC paper: DEVELOP(0), STOP(1), FIX(2), WASH(3)
+        switch (stage) {
+            case STAGE_DEVELOP: return 0;
+            case STAGE_STOP: return 1;
+            case STAGE_FIX: return 2;
+            case STAGE_WASH: return 3;
+            default: return 0;
+        }
+    } else {
+        // Fiber paper: DEVELOP(0), STOP(1), FIX(2), WASH1(3), HYPO_CLEAR(4), WASH2(5)
+        switch (stage) {
+            case STAGE_DEVELOP: return 0;
+            case STAGE_STOP: return 1;
+            case STAGE_FIX: return 2;
+            case STAGE_WASH1: return 3;
+            case STAGE_HYPO_CLEAR: return 4;
+            case STAGE_WASH2: return 5;
+            default: return 0;
+        }
+    }
+}
+
 // Helper function to draw stage indicators
-static void draw_stage_indicators(GContext *ctx, GRect bounds, TimerStage stage) {
-    const int indicator_width = bounds.size.w / 4;
-    const int indicator_height = 3;
+static void draw_stage_indicators(GContext *ctx, GRect bounds, TimerStage stage, int max_stages, PaperType paper_type) {
+    // Calculate indicator width accounting for spacing between indicators
     const int spacing = 2;
+    const int total_spacing = (max_stages - 1) * spacing;
+    const int available_width = bounds.size.w - total_spacing;
+    const int indicator_width = available_width / max_stages;
+    const int indicator_height = 3;
     
-    for (int i = 0; i < 4; i++) {
+    // Get the current stage display index
+    int current_stage_index = get_stage_display_index(stage, paper_type);
+    
+    for (int i = 0; i < max_stages; i++) {
         GRect indicator_bounds = GRect(
             bounds.origin.x + (i * (indicator_width + spacing)),
             bounds.origin.y,
@@ -549,52 +787,63 @@ static void draw_stage_indicators(GContext *ctx, GRect bounds, TimerStage stage)
             indicator_height
         );
         
-        if (i <= stage) {
-            graphics_fill_rect(ctx, indicator_bounds, 0, 0);
+        // Fill indicators up to and including the current stage
+        if (i <= current_stage_index) {
+            graphics_fill_rect(ctx, indicator_bounds, 0, GCornerNone);
         } else {
             graphics_draw_rect(ctx, indicator_bounds);
         }
     }
 }
 
+// Helper function to get display theme for a timer
+typedef struct {
+    bool is_light_background;
+    GColor text_color;
+    GColor background_color;
+} DisplayTheme;
+
+static DisplayTheme get_display_theme(int timer_number) {
+    bool should_invert = (timer_number == 1) ? 
+        s_settings.invert_timer1_colors : s_settings.invert_timer2_colors;
+    
+    // Timer 1 defaults to light mode, Timer 2 defaults to dark mode
+    bool default_light = (timer_number == 1);
+    
+    // Apply inversion settings to override defaults
+    if (should_invert) {
+        default_light = !default_light;
+    }
+    
+    return (DisplayTheme){
+        .is_light_background = default_light,
+        .text_color = default_light ? GColorBlack : GColorWhite,
+        .background_color = default_light ? GColorWhite : GColorBlack
+    };
+}
+
 // Update the canvas drawing procedure
 static void canvas_update_proc(Layer *layer, GContext *ctx) {
     GRect bounds = layer_get_bounds(layer);
     TimerState *timer = get_active_timer();
-    bool should_invert = (s_active_timer == 1) ? s_settings.invert_timer1_colors : s_settings.invert_timer2_colors;
     
-    // Default colors based on which timer is active
-    bool is_light_bg = (s_active_timer == 1);
+    // Get the appropriate display theme for the active timer
+    DisplayTheme theme = get_display_theme(s_active_timer);
     
-    // Apply inversion settings
-    if (should_invert) {
-        is_light_bg = !is_light_bg;
-    }
+    // Apply background color to window
+    window_set_background_color(s_main_window, theme.background_color);
     
-    // Set background color
-    if (is_light_bg) {
-        // White background with black text
-        window_set_background_color(s_main_window, GColorWhite);
-        graphics_context_set_fill_color(ctx, GColorBlack);
-        graphics_context_set_stroke_color(ctx, GColorBlack);
-        text_layer_set_text_color(s_timer_layer, GColorBlack);
-        text_layer_set_background_color(s_timer_layer, GColorClear);
-        text_layer_set_text_color(s_mode_layer, GColorBlack);
-        text_layer_set_background_color(s_mode_layer, GColorClear);
-        text_layer_set_text_color(s_timer_name_layer, GColorBlack);
-        text_layer_set_background_color(s_timer_name_layer, GColorClear);
-    } else {
-        // Black background with white text
-        window_set_background_color(s_main_window, GColorBlack);
-        graphics_context_set_fill_color(ctx, GColorWhite);
-        graphics_context_set_stroke_color(ctx, GColorWhite);
-        text_layer_set_text_color(s_timer_layer, GColorWhite);
-        text_layer_set_background_color(s_timer_layer, GColorClear);
-        text_layer_set_text_color(s_mode_layer, GColorWhite);
-        text_layer_set_background_color(s_mode_layer, GColorClear);
-        text_layer_set_text_color(s_timer_name_layer, GColorWhite);
-        text_layer_set_background_color(s_timer_name_layer, GColorClear);
-    }
+    // Set graphics context colors for drawing stage indicators
+    graphics_context_set_fill_color(ctx, theme.text_color);
+    graphics_context_set_stroke_color(ctx, theme.text_color);
+    
+    // Apply colors to all text layers
+    text_layer_set_text_color(s_timer_layer, theme.text_color);
+    text_layer_set_background_color(s_timer_layer, GColorClear);
+    text_layer_set_text_color(s_mode_layer, theme.text_color);
+    text_layer_set_background_color(s_mode_layer, GColorClear);
+    text_layer_set_text_color(s_timer_name_layer, theme.text_color);
+    text_layer_set_background_color(s_timer_name_layer, GColorClear);
     
     // Update text layers
     update_timer_text();
@@ -603,7 +852,7 @@ static void canvas_update_proc(Layer *layer, GContext *ctx) {
     
     // Draw stage indicators at the bottom of the screen
     GRect indicator_bounds = GRect(10, bounds.size.h - 20, bounds.size.w - 20, 3);
-    draw_stage_indicators(ctx, indicator_bounds, timer->stage);
+    draw_stage_indicators(ctx, indicator_bounds, timer->stage, timer->max_stages, timer->paper_type);
 }
 
 // Window load/unload
@@ -630,7 +879,7 @@ static void main_window_load(Window *window) {
     // Create mode layer (below timer name)
     s_mode_layer = text_layer_create(GRect(0, timer_name_height + timer_vertical_padding*2, 
                                           bounds.size.w, mode_layer_height));
-    text_layer_set_font(s_mode_layer, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+    text_layer_set_font(s_mode_layer, fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
     text_layer_set_text_alignment(s_mode_layer, GTextAlignmentCenter);
     layer_add_child(s_canvas_layer, text_layer_get_layer(s_mode_layer));
     
@@ -643,7 +892,16 @@ static void main_window_load(Window *window) {
     text_layer_set_text_alignment(s_timer_layer, GTextAlignmentCenter);
     layer_add_child(s_canvas_layer, text_layer_get_layer(s_timer_layer));
     
-    // Initialize timers
+    // Initialize timers with proper paper types
+    // Timer 1 defaults to RC paper, Timer 2 defaults to Fiber paper
+    s_timer1.mode = MODE_PRINT;
+    s_timer1.paper_type = PAPER_RC;
+    s_timer1.max_stages = 4;
+    
+    s_timer2.mode = MODE_PRINT;
+    s_timer2.paper_type = PAPER_FIBER;
+    s_timer2.max_stages = 6;
+    
     reset_timer(&s_timer1);
     reset_timer(&s_timer2);
 }

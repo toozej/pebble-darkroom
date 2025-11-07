@@ -60,3 +60,5 @@ dkms.conf
 
 # LLM Prompts
 prompt.txt
+.kiro/
+.kilocode/

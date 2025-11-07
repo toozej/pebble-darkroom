@@ -16,6 +16,8 @@ static TimerState s_timer1 = {
     .paused = false,
     .mode = MODE_PRINT,
     .stage = STAGE_DEVELOP,
+    .paper_type = PAPER_RC,
+    .max_stages = 4,
     .seconds_remaining = 0,
     .timer_handle = NULL
 };
@@ -25,6 +27,8 @@ static TimerState s_timer2 = {
     .paused = false,
     .mode = MODE_PRINT,
     .stage = STAGE_DEVELOP,
+    .paper_type = PAPER_FIBER,
+    .max_stages = 6,
     .seconds_remaining = 0,
     .timer_handle = NULL
 };
@@ -32,6 +36,12 @@ static TimerState s_timer2 = {
 // Timer times arrays
 static int film_times[4] = {300, 60, 300, 300};  // Develop, Stop, Fix, Wash
 static int print_times[4] = {60, 30, 300, 300};  // Develop, Stop, Fix, Wash
+
+// RC paper timing (4 stages)
+static int rc_print_times[4] = {60, 30, 300, 300};  // Develop, Stop, Fix, Wash
+
+// Fiber paper timing (7 elements to match enum indices)
+static int fiber_print_times[7] = {120, 30, 120, 0, 300, 120, 900};  // Develop, Stop, Fix, (unused), Wash1, HC, Wash2
 
 
 // Getter functions for testing
@@ -55,6 +65,14 @@ int* get_print_times(void) {
     return print_times;
 }
 
+int* get_rc_print_times(void) {
+    return rc_print_times;
+}
+
+int* get_fiber_print_times(void) {
+    return fiber_print_times;
+}
+
 // Persistent storage functions
 void save_settings(void) {
     // Simulate persist_write_data for testing
@@ -66,6 +84,11 @@ void save_settings(void) {
     printf("Saving settings: vibration=%s, backlight=%s\n",
            s_settings.vibration_enabled ? "true" : "false",
            s_settings.backlight_enabled ? "true" : "false");
+    printf("Saving RC print times: [%d, %d, %d, %d]\n",
+           rc_print_times[0], rc_print_times[1], rc_print_times[2], rc_print_times[3]);
+    printf("Saving Fiber print times: [%d, %d, %d, %d, %d, %d]\n",
+           fiber_print_times[0], fiber_print_times[1], fiber_print_times[2], 
+           fiber_print_times[3], fiber_print_times[4], fiber_print_times[5]);
 }
 
 void load_settings(void) {
@@ -77,6 +100,59 @@ void load_settings(void) {
     persist_read_called = true;
     persist_key = SETTINGS_KEY;
     printf("Loading default settings\n");
+    
+    // Simulate backward compatibility migration from old print_times to rc_print_times
+    // In a real scenario, this would check if RC_PRINT_TIMES_KEY exists
+    // For testing, we'll simulate the migration
+    static bool migration_done = false;
+    if (!migration_done) {
+        printf("Migrating old print_times to rc_print_times for backward compatibility\n");
+        for (int i = 0; i < 4; i++) {
+            rc_print_times[i] = print_times[i];
+        }
+        migration_done = true;
+    }
+}
+
+// Timer configuration structure
+typedef struct {
+    TimerMode mode;
+    PaperType paper_type;
+    int *timing_array;
+    int stage_count;
+    const char *paper_name;
+} TimerConfig;
+
+// Timer configuration lookup helper function
+static TimerConfig get_timer_config(int timer_number, TimerMode mode) {
+    if (mode == MODE_FILM) {
+        return (TimerConfig){
+            .mode = MODE_FILM,
+            .paper_type = PAPER_RC, // Not applicable for film
+            .timing_array = film_times,
+            .stage_count = 4,
+            .paper_name = "Film"
+        };
+    } else {
+        // Timer 1 = RC, Timer 2 = Fiber
+        if (timer_number == 1) {
+            return (TimerConfig){
+                .mode = MODE_PRINT,
+                .paper_type = PAPER_RC,
+                .timing_array = rc_print_times,
+                .stage_count = 4,
+                .paper_name = "RC"
+            };
+        } else {
+            return (TimerConfig){
+                .mode = MODE_PRINT,
+                .paper_type = PAPER_FIBER,
+                .timing_array = fiber_print_times,
+                .stage_count = 6,
+                .paper_name = "FB"
+            };
+        }
+    }
 }
 
 // Timer control functions
@@ -88,8 +164,19 @@ void reset_timer(TimerState *timer) {
     timer->running = false;
     timer->paused = false;
     timer->stage = STAGE_DEVELOP;
-    timer->seconds_remaining = (timer->mode == MODE_FILM) ? 
-        film_times[STAGE_DEVELOP] : print_times[STAGE_DEVELOP];
+    
+    // Determine which timer this is (1 or 2)
+    int timer_number = (timer == &s_timer1) ? 1 : 2;
+    
+    // Get timer configuration
+    TimerConfig config = get_timer_config(timer_number, timer->mode);
+    
+    // Update timer properties based on configuration
+    timer->paper_type = config.paper_type;
+    timer->max_stages = config.stage_count;
+    
+    // Set initial timing for develop stage
+    timer->seconds_remaining = config.timing_array[STAGE_DEVELOP];
 }
 
 void pause_timer(TimerState *timer) {
@@ -133,6 +220,9 @@ char* timer_to_string(TimerState *timer) {
         case STAGE_STOP: stage_str = "STOP"; break;
         case STAGE_FIX: stage_str = "FIX"; break;
         case STAGE_WASH: stage_str = "WASH"; break;
+        case STAGE_WASH1: stage_str = "WASH1"; break;
+        case STAGE_HYPO_CLEAR: stage_str = "HYPO_CLEAR"; break;
+        case STAGE_WASH2: stage_str = "WASH2"; break;
         default: stage_str = "UNKNOWN"; break;
     }
     snprintf(buffer, sizeof(buffer), 

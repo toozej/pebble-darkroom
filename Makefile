@@ -9,7 +9,7 @@ MAKEFLAGS += --no-builtin-rules
 
 # Pebble app build configuration
 APP_NAME := pebble-darkroom
-VERSION := 1.0.0
+VERSION := 1.2.0
 
 # Pebble SDK configuration
 PEBBLE_SDK_VERSION := 4.5
@@ -102,10 +102,11 @@ local-test: ## Run unit tests using locally installed toolchain
 	gcc -I./app/$(APP_NAME)/tests -I./app/$(APP_NAME)/src/c \
 	-o app/$(APP_NAME)/test_runner \
 	app/$(APP_NAME)/tests/test_runner.c \
-	app/$(APP_NAME)/src/c/settings.c \
+	app/$(APP_NAME)/tests/settings.c \
 	app/$(APP_NAME)/tests/test_settings.c \
 	app/$(APP_NAME)/tests/test_timer.c \
 	app/$(APP_NAME)/tests/test_display.c \
+	app/$(APP_NAME)/tests/unity.c \
 	-lm
 	cd app/$(APP_NAME) && ./test_runner
 	@echo "Local unit tests completed"

@@ -44,7 +44,7 @@ repos:
 
   # lint Dockerfile
   - repo: https://github.com/hadolint/hadolint
-    rev: v2.13.1
+    rev: v2.14.0
     hooks:
       - id: hadolint-docker
         args: ["--ignore", "DL3007", "--ignore", "DL3008", "--ignore", "DL4006", "--ignore", "SC2046", "--ignore", "SC1091"]
@@ -57,7 +57,7 @@ repos:
         files: Makefile
 
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.7
+    rev: v1.7.9
     hooks:
       - id: actionlint
         args: ["-ignore", "SC2086"]

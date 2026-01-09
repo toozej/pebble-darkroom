@@ -32,7 +32,25 @@ RUN set -eux; \
       bzip2 \
       unzip \
       build-essential \
-      tini; \
+      tini \
+      libsdl1.2debian \
+      libfdt1 \
+      libfdt-dev \
+      libglib2.0-dev \
+      libpixman-1-0 \
+      libx11-6 \
+      libxext6 \
+      libxrender1 \
+      xauth \
+      procps \
+      htop \
+      xvfb \
+      x11vnc \
+      novnc \
+      net-tools \
+      netcat-openbsd \
+      websockify \
+      supervisor; \
     rm -rf /var/lib/apt/lists/*
 
 # Create an unprivileged user to run builds.
@@ -93,9 +111,12 @@ VOLUME /workspace/
 # Set default working directory
 WORKDIR /workspace/
 
-# Use Tini as PID 1 for signal handling; drop into a shell by default.
-# (Tini was installed from Debian above.)
+# Copy supervisord and app configurations
+COPY container-config/supervisord.conf /etc/supervisor/supervisord.conf
+COPY container-config/conf.d/ /etc/supervisor/conf.d/
+
+# Use Tini as PID 1 and run supervisord
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["/bin/bash"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
 
 

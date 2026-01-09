@@ -23,7 +23,6 @@ typedef enum {
     STAGE_STOP,
     STAGE_FIX,
     STAGE_WASH,
-    STAGE_WASH1,
     STAGE_HYPO_CLEAR,
     STAGE_WASH2
 } TimerStage;
@@ -48,16 +47,14 @@ typedef struct {
 // Persistent storage keys
 #define SETTINGS_KEY 1
 #define FILM_TIMES_KEY 2
-#define PRINT_TIMES_KEY 3
-#define RC_PRINT_TIMES_KEY 4
-#define FIBER_PRINT_TIMES_KEY 5
+#define RC_PRINT_TIMES_KEY 3
+#define FIBER_PRINT_TIMES_KEY 4
 
 // Function declarations for testing
 Settings* get_settings(void);
 TimerState* get_timer1(void);
 TimerState* get_timer2(void);
 int* get_film_times(void);
-int* get_print_times(void);
 int* get_rc_print_times(void);
 int* get_fiber_print_times(void);
 void save_settings(void);
@@ -65,6 +62,7 @@ void load_settings(void);
 void reset_timer(TimerState *timer);
 void pause_timer(TimerState *timer);
 void resume_timer(TimerState *timer);
+TimerStage get_max_stage(TimerState *timer);
 
 // Utility functions for testing
 char* timer_to_string(TimerState *timer);

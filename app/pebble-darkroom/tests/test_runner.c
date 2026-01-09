@@ -13,6 +13,8 @@ void test_enhanced_mode_text(void);
 void test_stage_name_mapping(void);
 void test_mode_text_format_variations(void);
 void test_color_theme_comprehensive(void);
+void test_get_max_stage(void);
+void test_stage_scrolling(void);
 
 // Test suite setup and teardown
 void suiteSetup(void) {
@@ -46,6 +48,22 @@ int main(void) {
     
     if (setjmp(UnityGlobal.abortFrame) == 0) {
         test_timer();
+    } else {
+        UnityGlobal.numTests++;
+        UnityGlobal.numFails++;
+        printf("F\n");
+    }
+    
+    if (setjmp(UnityGlobal.abortFrame) == 0) {
+        test_get_max_stage();
+    } else {
+        UnityGlobal.numTests++;
+        UnityGlobal.numFails++;
+        printf("F\n");
+    }
+    
+    if (setjmp(UnityGlobal.abortFrame) == 0) {
+        test_stage_scrolling();
     } else {
         UnityGlobal.numTests++;
         UnityGlobal.numFails++;

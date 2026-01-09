@@ -50,14 +50,15 @@ repos:
         args: ["--ignore", "DL3007", "--ignore", "DL3008", "--ignore", "DL4006", "--ignore", "SC2046", "--ignore", "SC1091"]
 
   # lint Makefile
-  - repo: https://github.com/mrtazz/checkmake/
-    rev: 0.2.2
+  - repo: https://github.com/checkmake/checkmake/
+    rev: v0.3.0
     hooks:
       - id: checkmake
         files: Makefile
+        args: ["--config", "checkmake.ini"]
 
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.9
+    rev: v1.7.10
     hooks:
       - id: actionlint
         args: ["-ignore", "SC2086"]

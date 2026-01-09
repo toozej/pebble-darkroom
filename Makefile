@@ -40,21 +40,30 @@ APP_JSON := appinfo.json
 DOCKER_CMD := pebble new-project pebble-darkroom && find /pebble-darkroom -maxdepth 1 -type f -not -name 'build' -exec cp {} /workspace/pebble-darkroom/ \; && find /pebble-darkroom/src -type f -exec cp {} /workspace/pebble-darkroom/src/ \; && cd /workspace/pebble-darkroom && pebble build
 
 
-.PHONY: all build test local local-prereqs local-init local-build local-test local-run local-install local-init local-watch local-package local-release local-logs pre-commit-install pre-commit-run pre-commit clean help
+.PHONY: all build emulate test local local-prereqs local-init local-build local-test local-run local-install local-init local-watch local-package local-release local-logs pre-commit-install pre-commit-run pre-commit clean help
 
-build: ## Build the Pebble app using Docker
+build-docker-image: ## Build the Docker image for Pebble SDK
 	docker build -f Dockerfile -t pebble-sdk:latest .
-	-docker rm -f pebble-sdk 2>/dev/null || true
-	docker run --name pebble-sdk --user 1000:100 -v $(CURDIR)/app/$(APP_NAME):/$(APP_NAME) --workdir /workspace/ pebble-sdk:latest bash -c "$(DOCKER_CMD)"
-	docker stop pebble-sdk
+
+build: build-docker-image ## Build the Pebble app using Docker
+	-docker rm -f pebble-sdk-container 2>/dev/null || true
+	docker run --name pebble-sdk-container --user 1000:100 -v $(CURDIR)/app/$(APP_NAME):/$(APP_NAME) --workdir /workspace/ pebble-sdk:latest bash -c "$(DOCKER_CMD)"
+	docker stop pebble-sdk-container
+
+emulate: build-docker-image ## Build and run the Pebble app in the emulator
+	docker compose down --remove-orphans && docker compose up --build -d
+	@echo "Pebble emulator is running in the background."
+	sleep 5 # Wait for emulator to start
+	@echo "To connect, open your browser and go to: http://127.0.0.1:8080"
+	@echo "To stop the emulator, run: make clean"
 
 copy: ## Copy built Pebble app from Docker image to local filesystem
-	docker cp pebble-sdk:/workspace/$(PBW_FILE) $(CURDIR)/$(APP_NAME).pbw
-	-docker rm -f pebble-sdk
+	docker cp pebble-sdk-container:/workspace/$(PBW_FILE) $(CURDIR)/$(APP_NAME).pbw
+	-docker rm -f pebble-sdk-container
 
 test: ## Run unit tests using Docker
 	@echo "Building and running unit tests in Docker..."
-	docker build --target test -f Dockerfile -t pebble-sdk:test .
+	docker build --no-cache --target test -f Dockerfile -t pebble-sdk:test .
 	@echo "Unit tests completed"
 
 local-prereqs: ## Install Pebble SDK and prereqs locally
@@ -166,8 +175,7 @@ pre-commit-run: ## Run pre-commit hooks against all files
 	pre-commit run --all-files
 
 clean: ## Remove any locally compiled binaries
-	-docker kill pebble-sdk
-	-docker rm pebble-sdk
+	-docker-compose down --remove-orphans
 	rm -rf $(BUILD_DIR)/*
 	rm -rf $(DIST_DIR)/*
 

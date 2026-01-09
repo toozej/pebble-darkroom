@@ -2,7 +2,6 @@
 
 #define SETTINGS_KEY 1
 #define FILM_TIMES_KEY 2
-#define PRINT_TIMES_KEY 3
 #define RC_PRINT_TIMES_KEY 4
 #define FIBER_PRINT_TIMES_KEY 5
 
@@ -28,7 +27,6 @@ typedef enum {
     STAGE_STOP,
     STAGE_FIX,
     STAGE_WASH,
-    STAGE_WASH1,
     STAGE_HYPO_CLEAR,
     STAGE_WASH2
 } TimerStage;
@@ -99,13 +97,6 @@ static int film_times[4] = {
     300   // Wash: 5 mins
 };
 
-static int print_times[4] = {
-    60,   // Develop: 1 min
-    30,   // Stop: 30 secs
-    300,  // Fix: 5 mins
-    300   // Wash: 5 mins
-};
-
 // RC paper timing (4 stages)
 static int rc_print_times[4] = {
     60,   // Develop: 1 min
@@ -114,13 +105,12 @@ static int rc_print_times[4] = {
     300   // Wash: 5 mins
 };
 
-// Fiber paper timing (7 elements to match enum indices)
-static int fiber_print_times[7] = {
+// Fiber paper timing (6 stages)
+static int fiber_print_times[6] = {
     120,  // Develop: 2 min
     30,   // Stop: 30 sec
     120,  // Fix: 2 min
-    0,    // Wash: unused for fiber paper
-    300,  // Wash1: 5 min
+    300,  // Wash: 5 min
     120,  // Hypo Clear: 2 min
     900   // Wash2: 15 min
 };
@@ -129,7 +119,6 @@ static int fiber_print_times[7] = {
 static void save_settings() {
     persist_write_data(SETTINGS_KEY, &s_settings, sizeof(Settings));
     persist_write_data(FILM_TIMES_KEY, &film_times, sizeof(film_times));
-    persist_write_data(PRINT_TIMES_KEY, &print_times, sizeof(print_times));
     persist_write_data(RC_PRINT_TIMES_KEY, &rc_print_times, sizeof(rc_print_times));
     persist_write_data(FIBER_PRINT_TIMES_KEY, &fiber_print_times, sizeof(fiber_print_times));
 }
@@ -141,18 +130,10 @@ static void load_settings() {
     if (persist_exists(FILM_TIMES_KEY)) {
         persist_read_data(FILM_TIMES_KEY, &film_times, sizeof(film_times));
     }
-    if (persist_exists(PRINT_TIMES_KEY)) {
-        persist_read_data(PRINT_TIMES_KEY, &print_times, sizeof(print_times));
-    }
     
-    // Load RC and Fiber timing arrays, with backward compatibility migration
+    // Load RC and Fiber timing arrays
     if (persist_exists(RC_PRINT_TIMES_KEY)) {
         persist_read_data(RC_PRINT_TIMES_KEY, &rc_print_times, sizeof(rc_print_times));
-    } else if (persist_exists(PRINT_TIMES_KEY)) {
-        // Migrate existing print_times to rc_print_times for backward compatibility
-        for (int i = 0; i < 4; i++) {
-            rc_print_times[i] = print_times[i];
-        }
     }
     
     if (persist_exists(FIBER_PRINT_TIMES_KEY)) {
@@ -225,14 +206,13 @@ static void update_mode_text() {
         paper_type = (timer->paper_type == PAPER_RC) ? "RC" : "FB";
     }
     
-    // Get stage text including new fiber stages
+    // Get stage text
     const char *stage_text = "Unknown";
     switch (timer->stage) {
         case STAGE_DEVELOP: stage_text = "Dev"; break;
         case STAGE_STOP: stage_text = "Stop"; break;
         case STAGE_FIX: stage_text = "Fix"; break;
         case STAGE_WASH: stage_text = "Wash"; break;
-        case STAGE_WASH1: stage_text = "Wash1"; break;
         case STAGE_HYPO_CLEAR: stage_text = "HC"; break;
         case STAGE_WASH2: stage_text = "Wash2"; break;
     }
@@ -300,9 +280,7 @@ static void timer_callback(void *data) {
         
         // Get timer configuration to determine max stages and timing
         TimerConfig config = get_timer_config(timer_number, timer->mode);
-        
-        // Calculate the maximum stage index based on stage count
-        int max_stage_index = config.stage_count - 1;
+
         TimerStage max_stage;
         
         if (timer->mode == MODE_FILM) {
@@ -337,6 +315,16 @@ static void timer_callback(void *data) {
     layer_mark_dirty(s_canvas_layer);
 }
 
+static void force_screen_refresh() {
+    // Force a complete layer refresh to address screen tearing
+    layer_mark_dirty(window_get_root_layer(s_main_window));
+    
+    // Optionally provide haptic feedback to confirm the action
+    if (s_settings.vibration_enabled) {
+        vibes_short_pulse();
+    }
+}
+
 // Menu callbacks
 static uint16_t menu_get_num_sections_callback(MenuLayer *menu_layer, void *data) {
     return 5;
@@ -348,7 +336,7 @@ static uint16_t menu_get_num_rows_callback(MenuLayer *menu_layer, uint16_t secti
         case 1: return 3;  // Color Settings
         case 2: return 4;  // Film times
         case 3: return 4;  // RC Print times
-        case 4: return 6;  // Fiber Print times
+        case 4: return 5;  // Fiber Print times
         default: return 0;
     }
 }
@@ -452,28 +440,28 @@ static void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuI
         case 4:
             switch (cell_index->row) {
                 case 0:
-                    snprintf(buffer, sizeof(buffer), "Develop: %d:%02d", 
+                    snprintf(buffer, sizeof(buffer), "Develop: %d:%02d",
                              fiber_print_times[0]/60, fiber_print_times[0]%60);
                     break;
                 case 1:
-                    snprintf(buffer, sizeof(buffer), "Stop: %d:%02d", 
+                    snprintf(buffer, sizeof(buffer), "Stop: %d:%02d",
                              fiber_print_times[1]/60, fiber_print_times[1]%60);
                     break;
                 case 2:
-                    snprintf(buffer, sizeof(buffer), "Fix: %d:%02d", 
+                    snprintf(buffer, sizeof(buffer), "Fix: %d:%02d",
                              fiber_print_times[2]/60, fiber_print_times[2]%60);
                     break;
                 case 3:
-                    snprintf(buffer, sizeof(buffer), "Wash1: %d:%02d", 
-                             fiber_print_times[4]/60, fiber_print_times[4]%60);
+                    snprintf(buffer, sizeof(buffer), "Wash: %d:%02d",
+                             fiber_print_times[3]/60, fiber_print_times[3]%60);
                     break;
                 case 4:
-                    snprintf(buffer, sizeof(buffer), "HC: %d:%02d", 
-                             fiber_print_times[5]/60, fiber_print_times[5]%60);
+                    snprintf(buffer, sizeof(buffer), "HC: %d:%02d",
+                             fiber_print_times[4]/60, fiber_print_times[4]%60);
                     break;
                 case 5:
-                    snprintf(buffer, sizeof(buffer), "Wash2: %d:%02d", 
-                             fiber_print_times[6]/60, fiber_print_times[6]%60);
+                    snprintf(buffer, sizeof(buffer), "Wash2: %d:%02d",
+                             fiber_print_times[5]/60, fiber_print_times[5]%60);
                     break;
             }
             break;
@@ -490,11 +478,17 @@ static void menu_draw_row_callback(GContext* ctx, const Layer *cell_layer, MenuI
 }
 
 static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, void *data) {
+    // First item in Basic Settings section (row 0) triggers force screen refresh
+    if (cell_index->section == 0 && cell_index->row == 0) {
+        force_screen_refresh();
+        return;
+    }
+    
     switch (cell_index->section) {
         case 0:
             switch (cell_index->row) {
                 case 0:
-                    s_settings.vibration_enabled = !s_settings.vibration_enabled;
+                    // Force screen refresh handled at the beginning of this function
                     break;
                 case 1:
                     s_settings.backlight_enabled = !s_settings.backlight_enabled;
@@ -557,19 +551,7 @@ static void menu_select_callback(MenuLayer *menu_layer, MenuIndex *cell_index, v
                 NULL
             );
             
-            // Map row index to correct fiber_print_times array index
-            int fiber_index;
-            switch (cell_index->row) {
-                case 0: fiber_index = 0; break;  // Develop
-                case 1: fiber_index = 1; break;  // Stop
-                case 2: fiber_index = 2; break;  // Fix
-                case 3: fiber_index = 4; break;  // Wash1
-                case 4: fiber_index = 5; break;  // HC
-                case 5: fiber_index = 6; break;  // Wash2
-                default: fiber_index = 0; break;
-            }
-            
-            number_window_set_value(number_window, fiber_print_times[fiber_index]);
+            number_window_set_value(number_window, fiber_print_times[cell_index->row]);
             window_stack_push(number_window_get_window(number_window), true);
             break;
         }
@@ -618,13 +600,14 @@ static void resume_timer(TimerState *timer) {
     timer->timer_handle = app_timer_register(1000, timer_callback, timer);
 }
 
-static void force_screen_refresh() {
-    // Force a complete layer refresh to address screen tearing
-    layer_mark_dirty(window_get_root_layer(s_main_window));
-    
-    // Optionally provide haptic feedback to confirm the action
-    if (s_settings.vibration_enabled) {
-        vibes_short_pulse();
+// Helper function to get max stage for current timer
+static TimerStage get_max_stage(TimerState *timer) {
+    if (timer->mode == MODE_FILM) {
+        return STAGE_WASH;  // Film has 4 stages ending at WASH
+    } else if (timer->paper_type == PAPER_RC) {
+        return STAGE_WASH;  // RC paper has 4 stages ending at WASH
+    } else {
+        return STAGE_WASH2;  // Fiber paper has 6 stages ending at WASH2
     }
 }
 
@@ -633,17 +616,53 @@ static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
     window_stack_push(s_menu_window, true);
 }
 
-// Up button long - force screen refresh
-static void up_long_click_handler(ClickRecognizerRef recognizer, void *context) {
-    force_screen_refresh();
+// Up button single - reset current timer
+static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
+    TimerState *timer = get_active_timer();
+    reset_timer(timer);
+    update_timer_text();
+    update_mode_text();
+    layer_mark_dirty(s_canvas_layer);
 }
 
-// Up button - switch between timer 1 and timer 2
+// Up button double - switch between timer 1 and timer 2
 static void up_double_click_handler(ClickRecognizerRef recognizer, void *context) {
     s_active_timer = (s_active_timer == 1) ? 2 : 1;
     update_timer_text();
     update_mode_text();
     update_timer_name_text();
+    force_screen_refresh();
+    layer_mark_dirty(s_canvas_layer);
+}
+
+// Up button long - scroll forward through stages in current timer
+static void up_long_click_handler(ClickRecognizerRef recognizer, void *context) {
+    TimerState *timer = get_active_timer();
+    TimerStage max_stage = get_max_stage(timer);
+    
+    // Stop the timer if running
+    if (timer->timer_handle) {
+        app_timer_cancel(timer->timer_handle);
+        timer->timer_handle = NULL;
+    }
+    timer->running = false;
+    timer->paused = false;
+    
+    // Move to next stage
+    if (timer->stage < max_stage) {
+        timer->stage++;
+    } else {
+        // Wrap back to develop
+        timer->stage = STAGE_DEVELOP;
+    }
+    
+    // Update timer seconds based on new stage
+    int timer_number = (timer == &s_timer1) ? 1 : 2;
+    TimerConfig config = get_timer_config(timer_number, timer->mode);
+    timer->seconds_remaining = config.timing_array[timer->stage];
+    
+    update_timer_text();
+    update_mode_text();
     layer_mark_dirty(s_canvas_layer);
 }
 
@@ -664,14 +683,7 @@ static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
     layer_mark_dirty(s_canvas_layer);
 }
 
-static void down_long_click_handler(ClickRecognizerRef recognizer, void *context) {
-    TimerState *timer = get_active_timer();
-    reset_timer(timer);
-    update_timer_text();
-    update_mode_text();
-    layer_mark_dirty(s_canvas_layer);
-}
-
+// Down button double - switch between film and print modes
 static void down_double_click_handler(ClickRecognizerRef recognizer, void *context) {
     TimerState *timer = get_active_timer();
     timer->mode = (timer->mode == MODE_FILM) ? MODE_PRINT : MODE_FILM;
@@ -690,15 +702,48 @@ static void down_double_click_handler(ClickRecognizerRef recognizer, void *conte
     layer_mark_dirty(s_canvas_layer);
 }
 
+// Down button long - scroll backward through stages in current timer
+static void down_long_click_handler(ClickRecognizerRef recognizer, void *context) {
+    TimerState *timer = get_active_timer();
+    TimerStage max_stage = get_max_stage(timer);
+    
+    // Stop the timer if running
+    if (timer->timer_handle) {
+        app_timer_cancel(timer->timer_handle);
+        timer->timer_handle = NULL;
+    }
+    timer->running = false;
+    timer->paused = false;
+    
+    // Move to previous stage
+    if (timer->stage > STAGE_DEVELOP) {
+        timer->stage--;
+    } else {
+        // Wrap to max stage
+        timer->stage = max_stage;
+    }
+    
+    // Update timer seconds based on new stage
+    int timer_number = (timer == &s_timer1) ? 1 : 2;
+    TimerConfig config = get_timer_config(timer_number, timer->mode);
+    timer->seconds_remaining = config.timing_array[timer->stage];
+    
+    update_timer_text();
+    update_mode_text();
+    layer_mark_dirty(s_canvas_layer);
+}
+
 static void click_config_provider(void *context) {
     window_single_click_subscribe(BUTTON_ID_SELECT, select_click_handler);
+
+    window_single_click_subscribe(BUTTON_ID_UP, up_click_handler);
     window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
-    
-    window_long_click_subscribe(BUTTON_ID_UP, 700, up_long_click_handler, NULL);
-    window_long_click_subscribe(BUTTON_ID_DOWN, 700, down_long_click_handler, NULL);
-    
+
     window_multi_click_subscribe(BUTTON_ID_UP, 2, 0, 0, true, up_double_click_handler);
     window_multi_click_subscribe(BUTTON_ID_DOWN, 2, 0, 0, true, down_double_click_handler);
+
+    window_long_click_subscribe(BUTTON_ID_UP, 700, up_long_click_handler, NULL);
+    window_long_click_subscribe(BUTTON_ID_DOWN, 700, down_long_click_handler, NULL);
 }
 
 static void main_window_unload(Window *window) {
@@ -751,7 +796,7 @@ static int get_stage_display_index(TimerStage stage, PaperType paper_type) {
             case STAGE_STOP: return 1;
             case STAGE_FIX: return 2;
             case STAGE_WASH: return 3;
-            default: return 0;
+            default: return 0; // Should not happen
         }
     } else {
         // Fiber paper: DEVELOP(0), STOP(1), FIX(2), WASH1(3), HYPO_CLEAR(4), WASH2(5)
@@ -759,10 +804,10 @@ static int get_stage_display_index(TimerStage stage, PaperType paper_type) {
             case STAGE_DEVELOP: return 0;
             case STAGE_STOP: return 1;
             case STAGE_FIX: return 2;
-            case STAGE_WASH1: return 3;
+            case STAGE_WASH: return 3;
             case STAGE_HYPO_CLEAR: return 4;
             case STAGE_WASH2: return 5;
-            default: return 0;
+            default: return 0; // Should not happen
         }
     }
 }

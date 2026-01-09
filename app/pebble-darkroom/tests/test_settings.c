@@ -45,17 +45,11 @@ void test_settings(void) {
     
     // Test 5: Verify timer times arrays
     int *film = get_film_times();
-    int *print = get_print_times();
     
     TEST_ASSERT_EQUAL_INT(film[STAGE_DEVELOP], 300);
     TEST_ASSERT_EQUAL_INT(film[STAGE_STOP], 60);
     TEST_ASSERT_EQUAL_INT(film[STAGE_FIX], 300);
     TEST_ASSERT_EQUAL_INT(film[STAGE_WASH], 300);
-    
-    TEST_ASSERT_EQUAL_INT(print[STAGE_DEVELOP], 60);
-    TEST_ASSERT_EQUAL_INT(print[STAGE_STOP], 30);
-    TEST_ASSERT_EQUAL_INT(print[STAGE_FIX], 300);
-    TEST_ASSERT_EQUAL_INT(print[STAGE_WASH], 300);
     
     // Test 6: Test settings string representation
     char *settings_str = settings_to_string(get_settings());
@@ -114,7 +108,7 @@ void test_settings(void) {
     TEST_ASSERT_EQUAL_INT(fiber_times[STAGE_DEVELOP], 120);
     TEST_ASSERT_EQUAL_INT(fiber_times[STAGE_STOP], 30);
     TEST_ASSERT_EQUAL_INT(fiber_times[STAGE_FIX], 120);
-    TEST_ASSERT_EQUAL_INT(fiber_times[STAGE_WASH1], 300);
+    TEST_ASSERT_EQUAL_INT(fiber_times[STAGE_WASH], 300);
     TEST_ASSERT_EQUAL_INT(fiber_times[STAGE_HYPO_CLEAR], 120);
     TEST_ASSERT_EQUAL_INT(fiber_times[STAGE_WASH2], 900);
     
@@ -172,7 +166,7 @@ void test_settings_persistence_integration(void) {
     fiber_times[STAGE_DEVELOP] = 150;      // Change from default 120
     fiber_times[STAGE_STOP] = 45;          // Change from default 30
     fiber_times[STAGE_FIX] = 180;          // Change from default 120
-    fiber_times[STAGE_WASH1] = 420;        // Change from default 300
+    fiber_times[STAGE_WASH] = 420;        // Change from default 300
     fiber_times[STAGE_HYPO_CLEAR] = 150;   // Change from default 120
     fiber_times[STAGE_WASH2] = 1200;       // Change from default 900
     
@@ -231,7 +225,7 @@ void test_settings_persistence_integration(void) {
     fiber_times[STAGE_DEVELOP] = 120;
     fiber_times[STAGE_STOP] = 30;
     fiber_times[STAGE_FIX] = 120;
-    fiber_times[STAGE_WASH1] = 300;
+    fiber_times[STAGE_WASH] = 300;
     fiber_times[STAGE_HYPO_CLEAR] = 120;
     fiber_times[STAGE_WASH2] = 900;
     
@@ -255,11 +249,11 @@ void test_settings_persistence_integration(void) {
         TEST_ASSERT_TRUE(rc_times[i] > 0);  // All stages should have positive timing
     }
     
-    // Verify Fiber array has 6 active stages (index 3 is unused)
+    // Verify Fiber array has 6 active stages
     TEST_ASSERT_TRUE(fiber_times[STAGE_DEVELOP] > 0);
     TEST_ASSERT_TRUE(fiber_times[STAGE_STOP] > 0);
     TEST_ASSERT_TRUE(fiber_times[STAGE_FIX] > 0);
-    TEST_ASSERT_TRUE(fiber_times[STAGE_WASH1] > 0);
+    TEST_ASSERT_TRUE(fiber_times[STAGE_WASH] > 0);
     TEST_ASSERT_TRUE(fiber_times[STAGE_HYPO_CLEAR] > 0);
     TEST_ASSERT_TRUE(fiber_times[STAGE_WASH2] > 0);
     
@@ -278,9 +272,8 @@ void test_settings_persistence_integration(void) {
     // Verify correct persistence keys are used
     TEST_ASSERT_EQUAL_INT(SETTINGS_KEY, 1);
     TEST_ASSERT_EQUAL_INT(FILM_TIMES_KEY, 2);
-    TEST_ASSERT_EQUAL_INT(PRINT_TIMES_KEY, 3);
-    TEST_ASSERT_EQUAL_INT(RC_PRINT_TIMES_KEY, 4);
-    TEST_ASSERT_EQUAL_INT(FIBER_PRINT_TIMES_KEY, 5);
+    TEST_ASSERT_EQUAL_INT(RC_PRINT_TIMES_KEY, 3);
+    TEST_ASSERT_EQUAL_INT(FIBER_PRINT_TIMES_KEY, 4);
     
     printf("All settings persistence integration tests passed!\n");
 }
@@ -334,7 +327,7 @@ void setUp(void) {
     fiber_times[STAGE_DEVELOP] = 120;
     fiber_times[STAGE_STOP] = 30;
     fiber_times[STAGE_FIX] = 120;
-    fiber_times[STAGE_WASH1] = 300;
+    fiber_times[STAGE_WASH] = 300;
     fiber_times[STAGE_HYPO_CLEAR] = 120;
     fiber_times[STAGE_WASH2] = 900;
     
@@ -343,10 +336,4 @@ void setUp(void) {
     film_times[STAGE_STOP] = 60;
     film_times[STAGE_FIX] = 300;
     film_times[STAGE_WASH] = 300;
-    
-    int *print_times = get_print_times();
-    print_times[STAGE_DEVELOP] = 60;
-    print_times[STAGE_STOP] = 30;
-    print_times[STAGE_FIX] = 300;
-    print_times[STAGE_WASH] = 300;
 }

@@ -3,8 +3,10 @@ build/
 .lock*
 tmp/
 
-# Prerequisites
-*.d
+# Temp files
+supervisord.log
+supervisord.pid
+*.disabled
 
 # Object files
 *.o

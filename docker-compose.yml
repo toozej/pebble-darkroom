@@ -7,13 +7,12 @@ services:
     restart: unless-stopped
     volumes:
       - ./app:/workspace
-      - /tmp/.X11-unix:/tmp/.X11-unix  # Enable GUI apps like the emulator
     environment:
       - NVM_DIR=/home/pebble/.nvm
-      - DISPLAY=${DISPLAY}  # Enable GUI for emulator
     ports:
-      - "59443:59443"  # Required for emulator
-    network_mode: "host"  # Required for proper emulator display on some systems
-    working_dir: /workspace
+      - "9000:9000" # Pebble app/timeline connection
+      - "5900:5900" # VNC connection
+      - "8080:80" # no-vnc web interface
+    working_dir: /workspace/pebble-darkroom
     stdin_open: true
     tty: true  # Keep the container interactive

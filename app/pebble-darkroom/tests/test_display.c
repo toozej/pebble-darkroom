@@ -42,6 +42,8 @@ static void update_mode_text(void) {
         case STAGE_STOP: stage_text = "Stop"; break;
         case STAGE_FIX: stage_text = "Fix"; break;
         case STAGE_WASH: stage_text = "Wash"; break;
+        case STAGE_HYPO_CLEAR: stage_text = "HC"; break;
+        case STAGE_WASH2: stage_text = "Wash2"; break;
     }
     snprintf(mock_mode_buffer, sizeof(mock_mode_buffer), "%c | %s | %s", 
              mode_char, stage_text, 
@@ -91,7 +93,6 @@ static void update_mode_text_enhanced(void) {
         case STAGE_STOP: stage_text = "Stop"; break;
         case STAGE_FIX: stage_text = "Fix"; break;
         case STAGE_WASH: stage_text = "Wash"; break;
-        case STAGE_WASH1: stage_text = "Wash1"; break;
         case STAGE_HYPO_CLEAR: stage_text = "HC"; break;
         case STAGE_WASH2: stage_text = "Wash2"; break;
     }
@@ -281,10 +282,10 @@ void test_enhanced_mode_text(void) {
     update_mode_text_enhanced();
     TEST_ASSERT_EQUAL_STRING("P | FB | HC", mock_mode_buffer);
     
-    // Test 3: Fiber paper with Wash1 stage
-    timer2->stage = STAGE_WASH1;
+    // Test 3: Fiber paper with Wash stage
+    timer2->stage = STAGE_WASH;
     update_mode_text_enhanced();
-    TEST_ASSERT_EQUAL_STRING("P | FB | Wash1", mock_mode_buffer);
+    TEST_ASSERT_EQUAL_STRING("P | FB | Wash", mock_mode_buffer);
     
     // Test 4: Fiber paper with Wash2 stage
     timer2->stage = STAGE_WASH2;
@@ -348,11 +349,6 @@ void test_stage_name_mapping(void) {
     
     // Test all Fiber paper stages including new ones
     timer1->paper_type = PAPER_FIBER;
-    
-    // Test STAGE_WASH1 (Fiber specific)
-    timer1->stage = STAGE_WASH1;
-    update_mode_text_enhanced();
-    TEST_ASSERT_EQUAL_STRING("P | FB | Wash1", mock_mode_buffer);
     
     // Test STAGE_HYPO_CLEAR (Fiber specific)
     timer1->stage = STAGE_HYPO_CLEAR;

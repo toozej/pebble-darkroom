@@ -35,13 +35,12 @@ static TimerState s_timer2 = {
 
 // Timer times arrays
 static int film_times[4] = {300, 60, 300, 300};  // Develop, Stop, Fix, Wash
-static int print_times[4] = {60, 30, 300, 300};  // Develop, Stop, Fix, Wash
 
 // RC paper timing (4 stages)
 static int rc_print_times[4] = {60, 30, 300, 300};  // Develop, Stop, Fix, Wash
 
-// Fiber paper timing (7 elements to match enum indices)
-static int fiber_print_times[7] = {120, 30, 120, 0, 300, 120, 900};  // Develop, Stop, Fix, (unused), Wash1, HC, Wash2
+// Fiber paper timing (6 stages)
+static int fiber_print_times[6] = {120, 30, 120, 300, 120, 900};  // Develop, Stop, Fix, Wash, HC, Wash2
 
 
 // Getter functions for testing
@@ -59,10 +58,6 @@ TimerState* get_timer2(void) {
 
 int* get_film_times(void) {
     return film_times;
-}
-
-int* get_print_times(void) {
-    return print_times;
 }
 
 int* get_rc_print_times(void) {
@@ -101,17 +96,6 @@ void load_settings(void) {
     persist_key = SETTINGS_KEY;
     printf("Loading default settings\n");
     
-    // Simulate backward compatibility migration from old print_times to rc_print_times
-    // In a real scenario, this would check if RC_PRINT_TIMES_KEY exists
-    // For testing, we'll simulate the migration
-    static bool migration_done = false;
-    if (!migration_done) {
-        printf("Migrating old print_times to rc_print_times for backward compatibility\n");
-        for (int i = 0; i < 4; i++) {
-            rc_print_times[i] = print_times[i];
-        }
-        migration_done = true;
-    }
 }
 
 // Timer configuration structure
@@ -152,6 +136,17 @@ static TimerConfig get_timer_config(int timer_number, TimerMode mode) {
                 .paper_name = "FB"
             };
         }
+    }
+}
+
+// Helper function to get max stage for current timer
+TimerStage get_max_stage(TimerState *timer) {
+    if (timer->mode == MODE_FILM) {
+        return STAGE_WASH;  // Film has 4 stages ending at WASH
+    } else if (timer->paper_type == PAPER_RC) {
+        return STAGE_WASH;  // RC paper has 4 stages ending at WASH
+    } else {
+        return STAGE_WASH2;  // Fiber paper has 6 stages ending at WASH2
     }
 }
 
@@ -220,7 +215,6 @@ char* timer_to_string(TimerState *timer) {
         case STAGE_STOP: stage_str = "STOP"; break;
         case STAGE_FIX: stage_str = "FIX"; break;
         case STAGE_WASH: stage_str = "WASH"; break;
-        case STAGE_WASH1: stage_str = "WASH1"; break;
         case STAGE_HYPO_CLEAR: stage_str = "HYPO_CLEAR"; break;
         case STAGE_WASH2: stage_str = "WASH2"; break;
         default: stage_str = "UNKNOWN"; break;

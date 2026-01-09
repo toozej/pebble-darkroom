@@ -14,14 +14,9 @@
     },
     "remoteUser": "pebble",
     "postCreateCommand": "pebble --version",
-    "runArgs": [
-        "--network=host",
-        "--env",
-        "DISPLAY=${DISPLAY}"
-    ],
+    "runArgs": [],
     "containerEnv": {
-        "NVM_DIR": "/home/pebble/.nvm",
-        "DISPLAY": "${DISPLAY}"
+        "NVM_DIR": "/home/pebble/.nvm"
     },
     "shutdownAction": "stopCompose"
 }

@@ -167,6 +167,8 @@ pre-commit-install: ## Install pre-commit hooks and necessary binaries
 	command -v shellcheck || sudo dnf install -y ShellCheck || sudo apt install -y shellcheck
 	# checkmake
 	go install github.com/checkmake/checkmake/cmd/checkmake@latest
+	# actionlint
+	command -v actionlint || brew install actionlint || go install github.com/rhysd/actionlint/cmd/actionlint@latest
 	# install and update pre-commits
 	pre-commit install
 	pre-commit autoupdate

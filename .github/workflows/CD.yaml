@@ -23,7 +23,7 @@ jobs:
         run: tar -czvf pebble-darkroom.tar.gz ./pebble-darkroom.pbw
 
       - name: Upload Build Artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: built-package
           path: pebble-darkroom.tar.gz

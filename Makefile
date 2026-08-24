@@ -9,15 +9,14 @@ MAKEFLAGS += --no-builtin-rules
 
 # Pebble app build configuration
 APP_NAME := pebble-darkroom
-VERSION := 1.2.0
+VERSION := 1.4.0
 
 # Pebble SDK configuration
-PEBBLE_SDK_VERSION := 4.5
-PEBBLE_TOOL_PATH := $(HOME)/pebble-dev/pebble-sdk-$(PEBBLE_SDK_VERSION)
+PEBBLE_SDK_VERSION := 4.33.1
 
 # Project directory
 PROJ_DIR_LOCAL := app/pebble-darkroom
-PROJ_DIR := pebble-darkroom
+PROJ_DIR := $(PROJ_DIR_LOCAL)
 
 # Build directories
 BUILD_DIR := $(PROJ_DIR)/build
@@ -37,29 +36,30 @@ PACKAGE_JSON := package.json
 APP_JSON := appinfo.json
 
 # Docker info
-DOCKER_CMD := pebble new-project pebble-darkroom && find /pebble-darkroom -maxdepth 1 -type f -not -name 'build' -exec cp {} /workspace/pebble-darkroom/ \; && find /pebble-darkroom/src -type f -exec cp {} /workspace/pebble-darkroom/src/ \; && cd /workspace/pebble-darkroom && pebble build
+BUILD_CONTAINER := pebble-sdk-build
+DOCKER_CMD := pebble build
 
 
-.PHONY: all build emulate test local local-prereqs local-init local-build local-test local-run local-install local-init local-watch local-package local-release local-logs pre-commit-install pre-commit-run pre-commit clean help
+.PHONY: all build emulate test local local-prereqs local-init local-build local-test local-run local-install local-init local-watch local-package local-release local-logs pre-commit-install pre-commit-update pre-commit-run pre-commit clean help
 
 build-docker-image: ## Build the Docker image for Pebble SDK
-	docker build -f Dockerfile -t pebble-sdk:latest .
+	docker build --build-arg UID=$$(id -u) --build-arg GID=$$(id -g) -f Dockerfile -t pebble-sdk:latest .
 
 build: build-docker-image ## Build the Pebble app using Docker
-	-docker rm -f pebble-sdk-container 2>/dev/null || true
-	docker run --name pebble-sdk-container --user 1000:100 -v $(CURDIR)/app/$(APP_NAME):/$(APP_NAME) --workdir /workspace/ pebble-sdk:latest bash -c "$(DOCKER_CMD)"
-	docker stop pebble-sdk-container
+	-docker rm -f $(BUILD_CONTAINER) 2>/dev/null || true
+	docker run --name $(BUILD_CONTAINER) -v $(CURDIR)/app/$(APP_NAME):/workspace/$(APP_NAME) --workdir /workspace/$(APP_NAME) pebble-sdk:latest bash -c "$(DOCKER_CMD)"
 
 emulate: build-docker-image ## Build and run the Pebble app in the emulator
-	docker compose down --remove-orphans && docker compose up --build -d
+	PEBBLE_UID=$$(id -u) PEBBLE_GID=$$(id -g) docker compose down --remove-orphans
+	PEBBLE_UID=$$(id -u) PEBBLE_GID=$$(id -g) docker compose up --build -d
 	@echo "Pebble emulator is running in the background."
 	sleep 5 # Wait for emulator to start
 	@echo "To connect, open your browser and go to: http://127.0.0.1:8080"
 	@echo "To stop the emulator, run: make clean"
 
 copy: ## Copy built Pebble app from Docker image to local filesystem
-	docker cp pebble-sdk-container:/workspace/$(PBW_FILE) $(CURDIR)/$(APP_NAME).pbw
-	-docker rm -f pebble-sdk-container
+	docker cp $(BUILD_CONTAINER):/workspace/$(APP_NAME)/build/$(APP_NAME).pbw $(CURDIR)/$(APP_NAME).pbw
+	-docker rm -f $(BUILD_CONTAINER)
 
 test: ## Run unit tests using Docker
 	@echo "Building and running unit tests in Docker..."
@@ -68,42 +68,19 @@ test: ## Run unit tests using Docker
 
 local-prereqs: ## Install Pebble SDK and prereqs locally
 	@echo "Installing Pebble SDK and prerequisites..."
-	command -v uv || brew install uv || sudo apt-get update -qq && sudo apt-get install -y uv || sudo dnf install -y uv || curl -LsSf https://astral.sh/uv/install.sh | sh
-	uv tool install pebble-tool
+	command -v uv || { echo "Install uv from https://docs.astral.sh/uv/getting-started/installation/"; exit 1; }
+	uv tool install --upgrade pebble-tool
 	pebble --version
-	pebble sdk install latest
+	pebble sdk install $(PEBBLE_SDK_VERSION)
 	@echo "Pebble SDK installed successfully"
 
-local-init: local-prereqs ## Initialize project using locally installed toolchain
-	@echo "Initializing project..."
-	mkdir -p $(SRC_DIR) $(RESOURCES_DIR) $(BUILD_DIR) $(DIST_DIR)
-	# Create package.json if it doesn't exist
-	@if [ ! -f "$(PACKAGE_JSON)" ]; then \
-	echo '{"name":"$(APP_NAME)","version":"$(VERSION)","private":true}' > $(PACKAGE_JSON); \
-	fi
-	# Create appinfo.json if it doesn't exist
-	@if [ ! -f "$(APP_JSON)" ]; then \
-	echo '{ \
-	"uuid": "'$$(uuidgen)'", \
-	"shortName": "$(APP_NAME)", \
-	"longName": "Darkroom Timer", \
-	"companyName": "Your Company", \
-	"versionLabel": "$(VERSION)", \
-	"sdkVersion": "3", \
-	"targetPlatforms": ["aplite", "basalt", "chalk", "diorite"], \
-	"watchapp": { \
-	"watchface": false \
-	}, \
-	"resources": { \
-	"media": [] \
-	} \
-	}' > $(APP_JSON); \
-	fi
+local-init: local-prereqs ## Verify the local project and install its toolchain
+	@test -f $(PROJ_DIR_LOCAL)/$(PACKAGE_JSON)
+	@test -f $(PROJ_DIR_LOCAL)/wscript
 
-local-build: init ## Build the application using locally installed toolchain
+local-build: local-init ## Build the application using locally installed toolchain
 	@echo "Building application..."
-	source $(PEBBLE_TOOL_PATH)/.env/bin/activate && \
-	pebble build
+	cd $(PROJ_DIR_LOCAL) && pebble build
 	@echo "Build complete"
 
 local-test: ## Run unit tests using locally installed toolchain
@@ -120,19 +97,17 @@ local-test: ## Run unit tests using locally installed toolchain
 	cd app/$(APP_NAME) && ./test_runner
 	@echo "Local unit tests completed"
 
-local-install: build ## Install on connected Pebble using locally installed toolchain
+local-install: local-build ## Install on connected Pebble using locally installed toolchain
 	@echo "Installing on Pebble..."
-	source $(PEBBLE_TOOL_PATH)/.env/bin/activate && \
-	pebble install
+	cd $(PROJ_DIR_LOCAL) && pebble install
 	@echo "Installation complete"
 
-local-run: build ## Run in emulator using locally-installed toolchain
+local-run: local-build ## Run in emulator using locally-installed toolchain
 	@echo "Running in emulator..."
-	source $(PEBBLE_TOOL_PATH)/.env/bin/activate && \
-	pebble install --emulator basalt
+	cd $(PROJ_DIR_LOCAL) && pebble install --emulator basalt
 	@echo "Emulator launched"
 
-local-package: build ## Package for distribution using locally installed toolchain
+local-package: local-build ## Package for distribution using locally installed toolchain
 	@echo "Creating distribution package..."
 	mkdir -p $(DIST_DIR)
 	cp $(BUILD_DIR)/*.pbw $(DIST_DIR)/
@@ -153,11 +128,9 @@ local-release: local-package ## Create release bundle using locally installed to
 
 local-watch: local-build ## Watch development mode using locally installed toolchain
 	@echo "Starting development watch mode..."
-	source $(PEBBLE_TOOL_PATH)/.env/bin/activate && \
-	pebble build --watch
+	cd $(PROJ_DIR_LOCAL) && pebble build --watch
 
 local-logs: ## Show logs from connected Pebble using locally installed toolchain
-	source $(PEBBLE_TOOL_PATH)/.env/bin/activate && \
 	pebble logs
 
 pre-commit: pre-commit-install pre-commit-run ## Install and run pre-commit hooks
@@ -169,8 +142,10 @@ pre-commit-install: ## Install pre-commit hooks and necessary binaries
 	go install github.com/checkmake/checkmake/cmd/checkmake@latest
 	# actionlint
 	command -v actionlint || brew install actionlint || go install github.com/rhysd/actionlint/cmd/actionlint@latest
-	# install and update pre-commits
+	# install pre-commit hooks
 	pre-commit install
+
+pre-commit-update: ## Update pinned pre-commit hook revisions
 	pre-commit autoupdate
 
 pre-commit-run: ## Run pre-commit hooks against all files

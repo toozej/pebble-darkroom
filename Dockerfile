@@ -11,7 +11,9 @@ ENV \
   # pebble-tool analytics off to keep builds non-interactive
   PEBBLE_TOOL_NO_ANALYTICS=1 \
   # Add uv-installed tools and shims to PATH for all users
-  PATH="/home/pebble/.local/bin:/home/pebble/.local/share/uv/tools/bin:${PATH}"
+  PATH="/home/pebble/.local/bin:/home/pebble/.local/share/uv/tools/bin:${PATH}" \
+  # Keep the SDK selected by all image build and runtime commands explicit.
+  PEBBLE_SDK_VERSION=4.33.1
 
 # Install required runtime dependencies for Pebble SDK and tooling.
 # - Keep to a single apt layer, use --no-install-recommends, and clean lists afterwards.
@@ -20,11 +22,8 @@ RUN set -eux; \
     apt-get install -y --no-install-recommends \
       python3 \
       python3-venv \
-      python3-pip \
       nodejs \
       npm \
-      libsdl1.2debian \
-      libfdt1 \
       ca-certificates \
       curl \
       git \
@@ -33,11 +32,10 @@ RUN set -eux; \
       unzip \
       build-essential \
       tini \
-      libsdl1.2debian \
-      libfdt1 \
-      libfdt-dev \
       libglib2.0-dev \
       libpixman-1-0 \
+      libsdl2-2.0-0 \
+      libsndio7.0 \
       libx11-6 \
       libxext6 \
       libxrender1 \
@@ -71,23 +69,25 @@ WORKDIR /home/${USER}
 RUN set -eux; \
     curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Install pebble-tool via uv (user-local, no root required)
+# Install the current pebble-tool release via uv (user-local, no root required).
+# Keep it pinned so the image remains reproducible; update this alongside the SDK.
+ARG PEBBLE_TOOL_VERSION=5.0.39
 RUN set -eux; \
-    uv tool install pebble-tool
+    uv tool install "pebble-tool==${PEBBLE_TOOL_VERSION}"
 
-# Preinstall the latest Pebble SDK into the image to avoid downloads at runtime.
+# Preinstall Pebble SDK 4.33.1 into the image to avoid downloads at runtime.
 # This will populate the user's ~/.pebble-sdk directory.
 RUN set -eux; \
     pebble --version; \
-    pebble sdk install latest
+    pebble sdk install "${PEBBLE_SDK_VERSION}"; \
+    chmod 755 "/home/${USER}"
 
 
 FROM base AS test
 # Build and run unit tests for pebble-darkroom
-USER root
-COPY app/pebble-darkroom/ /workspace/pebble-darkroom/
-RUN chown -R pebble:pebble /workspace && chown -R pebble:pebble /workspace/pebble-darkroom
-USER pebble
+USER 0
+COPY --chown=${UID}:${GID} app/pebble-darkroom/ /workspace/pebble-darkroom/
+USER ${UID}:${GID}
 WORKDIR /workspace
 RUN pebble new-project pebble-test && \
     cp -r pebble-darkroom/src pebble-test/ && \
@@ -118,5 +118,3 @@ COPY container-config/conf.d/ /etc/supervisor/conf.d/
 # Use Tini as PID 1 and run supervisord
 ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
-
-

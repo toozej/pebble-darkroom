@@ -13,10 +13,7 @@
         }
     },
     "remoteUser": "pebble",
-    "postCreateCommand": "pebble --version",
+    "postCreateCommand": "pebble --version && pebble sdk list",
     "runArgs": [],
-    "containerEnv": {
-        "NVM_DIR": "/home/pebble/.nvm"
-    },
     "shutdownAction": "stopCompose"
 }

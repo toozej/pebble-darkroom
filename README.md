@@ -206,6 +206,14 @@ Customize seconds for each Fiber paper development stage:
 - Pebble smartphone app installed on your device
 - [Rebble web services setup](https://help.rebble.io/setup) (optional)
 
+The Docker image and Dev Container install Pebble SDK 4.33.1 and `pebble-tool`
+(via `uv`). For a local setup, install `uv`, then run:
+
+```bash
+uv tool install --upgrade pebble-tool
+pebble sdk install 4.33.1
+```
+
 ### Building the App
 1. Clone the repository:
 ```bash

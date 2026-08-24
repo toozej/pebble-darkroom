@@ -3,12 +3,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        UID: "${PEBBLE_UID:-1000}"
+        GID: "${PEBBLE_GID:-1000}"
     container_name: pebble-sdk-container
     restart: unless-stopped
+    user: "${PEBBLE_UID:-1000}:${PEBBLE_GID:-1000}"
     volumes:
       - ./app:/workspace
-    environment:
-      - NVM_DIR=/home/pebble/.nvm
     ports:
       - "9000:9000" # Pebble app/timeline connection
       - "5900:5900" # VNC connection
